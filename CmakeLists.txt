@@ -1,0 +1,25 @@
+cmake_minimum_required(VERSION 3.13)
+project(pong)
+set(CMAKE_CXX_STANDARD 20)
+
+add_executable(pong 
+"src/main.cpp"
+"src/pong/application.cpp"
+"src/pong/renderer/renderer.cpp"
+)
+
+target_include_directories(pong PRIVATE "include")
+
+if(EMSCRIPTEN)
+  set_target_properties(pong PROPERTIES SUFFIX ".html")
+      # Add Emscripten-specific link options
+      target_link_options(pong PRIVATE
+      "-sUSE_GLFW=3"
+      "-sUSE_WEBGPU"
+      "-sASYNCIFY"
+      )
+else()
+  set(DAWN_FETCH_DEPENDENCIES ON)
+  add_subdirectory("third_party/dawn" EXCLUDE_FROM_ALL)
+  target_link_libraries(pong PRIVATE webgpu_cpp webgpu_dawn webgpu_glfw)
+endif()
