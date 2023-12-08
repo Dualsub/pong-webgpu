@@ -1,4 +1,4 @@
-#include "pong/renderer/renderer.h"
+#include "pong/Renderer.h"
 
 namespace pong
 {

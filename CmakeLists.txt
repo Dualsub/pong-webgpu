@@ -4,8 +4,8 @@ set(CMAKE_CXX_STANDARD 20)
 
 add_executable(pong 
 "src/main.cpp"
-"src/pong/application.cpp"
-"src/pong/renderer/renderer.cpp"
+"src/pong/Application.cpp"
+"src/pong/Renderer.cpp"
 )
 
 target_include_directories(pong PRIVATE "include")
