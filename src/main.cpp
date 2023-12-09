@@ -1,8 +1,15 @@
-#include "pong/application.h"
+#include "pong/Application.h"
+#include "pong/Device.h"
+
+pong::Application app;
 
 int main()
 {
-    pong::Application app;
-    app.Run();
+    pong::WithDevice(
+        [](const pong::DeviceContext &context)
+        {
+            app.Run(context);
+        });
+
     return 0;
 }

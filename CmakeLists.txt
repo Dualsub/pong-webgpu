@@ -6,9 +6,13 @@ add_executable(pong
 "src/main.cpp"
 "src/pong/Application.cpp"
 "src/pong/Renderer.cpp"
+"src/pong/Device.cpp"
 )
 
 target_include_directories(pong PRIVATE "include")
+
+add_subdirectory("third_party/glm" EXCLUDE_FROM_ALL)
+target_link_libraries(pong PRIVATE glm)
 
 if(EMSCRIPTEN)
   set_target_properties(pong PROPERTIES SUFFIX ".html")
