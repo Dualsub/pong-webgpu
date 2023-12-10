@@ -9,6 +9,7 @@ namespace pong
     class Application
     {
     private:
+        static const uint32_t c_fps = 60;
         static Application *s_instance;
         Renderer m_renderer;
 

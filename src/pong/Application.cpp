@@ -1,5 +1,7 @@
 #include "pong/Application.h"
 
+#define __EMSCRIPTEN__ 1
+
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
 #include <webgpu/webgpu_cpp.h>
@@ -15,20 +17,15 @@ namespace pong
 {
     Application *Application::s_instance = nullptr;
 
-    void EmscriptenMainLoop()
-    {
-        Application::Render();
-    }
-
     void Application::Run(const DeviceContext &context)
     {
-        if (!glfwInit())
-        {
-            return;
-        }
+        // if (!glfwInit())
+        // {
+        //     return;
+        // }
 
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        GLFWwindow *window = glfwCreateWindow(640, 480, "WebGPU window", nullptr, nullptr);
+        // glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        // GLFWwindow *window = glfwCreateWindow(640, 480, "WebGPU window", nullptr, nullptr);
 
         if (!m_renderer.Initialize(context))
         {
@@ -37,7 +34,13 @@ namespace pong
         }
 
 #if defined(__EMSCRIPTEN__)
-        emscripten_set_main_loop(EmscriptenMainLoop, 0, false);
+        emscripten_set_main_loop_arg(
+            [](void *arg)
+            {
+                auto *app = reinterpret_cast<Application *>(arg);
+                app->m_renderer.Render();
+            },
+            this, c_fps, true);
 #else
         while (!glfwWindowShouldClose(window))
         {

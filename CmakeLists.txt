@@ -6,6 +6,7 @@ add_executable(pong
 "src/main.cpp"
 "src/pong/Application.cpp"
 "src/pong/Renderer.cpp"
+"src/pong/Model.cpp"
 "src/pong/Device.cpp"
 )
 
