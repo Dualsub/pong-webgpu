@@ -19,7 +19,7 @@ namespace pong
             {
                 if (status != WGPURequestAdapterStatus_Success)
                 {
-                    exit(0);
+                    exit(1);
                 }
                 wgpu::Adapter adapter = wgpu::Adapter::Acquire(cAdapter);
                 adapter.RequestDevice(

@@ -10,7 +10,7 @@ namespace pong
 {
     const char *shaderSource = R"(
     struct VertexInput {
-        @location(0) position: vec2f,
+        @location(0) position: vec3f,
         @location(1) color: vec3f,
     };
 
@@ -20,6 +20,9 @@ namespace pong
     };
 
     struct Uniforms {
+        model: mat4x4<f32>,
+        view: mat4x4<f32>,
+        projection: mat4x4<f32>,
         time: f32,
     };
 
@@ -28,10 +31,8 @@ namespace pong
     @vertex
     fn vs_main(in: VertexInput) -> VertexOutput {
         var out: VertexOutput;
-        let ratio = 640.0 / 480.0;
-        var offset = vec2f(-0.6875, -0.463);
-        offset += 0.3 * vec2f(cos(uUniforms.time), sin(uUniforms.time));
-        out.position = vec4f(in.position.x + offset.x, (in.position.y + offset.y) * ratio, 0.0, 1.0);
+        var position = vec4f(in.position, 1.0);
+        out.position = uUniforms.projection * uUniforms.view * uUniforms.model * position;
         out.color = in.color;
         return out;
     }
@@ -43,6 +44,13 @@ namespace pong
     }
 
     )";
+
+    // Helper function to round up to the next multiple of a number.
+    uint32_t CeilToNextMultiple(uint32_t value, uint32_t step)
+    {
+        uint32_t divide_and_ceil = value / step + (value % step == 0 ? 0 : 1);
+        return step * divide_and_ceil;
+    }
 
     bool Renderer::Initialize(const DeviceContext &context)
     {
@@ -65,6 +73,12 @@ namespace pong
         if (!InitializePipeline())
         {
             std::cerr << "Cannot initialize WebGPU pipeline" << std::endl;
+            return false;
+        }
+
+        if (!InitializeDepthTexture())
+        {
+            std::cerr << "Cannot initialize WebGPU depth texture" << std::endl;
             return false;
         }
 
@@ -122,27 +136,21 @@ namespace pong
         std::cout << "Initializing WebGPU pipeline" << std::endl;
         wgpu::RenderPipelineDescriptor pipelineDesc = {};
 
-        std::cout << "  Initializing WebGPU shader module" << std::endl;
         // Shader source.
         wgpu::ShaderModuleDescriptor shaderDesc;
         shaderDesc.label = "Shader Module Descriptor";
-
         wgpu::ShaderModuleWGSLDescriptor shaderCodeDesc;
         // Set the chained struct's header
         shaderCodeDesc.nextInChain = nullptr;
         shaderCodeDesc.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
         // Connect the chain
         shaderDesc.nextInChain = &shaderCodeDesc;
-
         shaderCodeDesc.code = shaderSource;
-
         auto shaderModule = m_device.CreateShaderModule(&shaderDesc);
-
-        std::cout << "  Initializing WebGPU vertex state" << std::endl;
 
         // Vertex state.
         wgpu::VertexBufferLayout vertexBufferLayout;
-        vertexBufferLayout.arrayStride = 5 * sizeof(float);
+        vertexBufferLayout.arrayStride = sizeof(Model::Vertex);
         vertexBufferLayout.stepMode = wgpu::VertexStepMode::Vertex;
 
         std::array<wgpu::VertexAttribute, 2> attributes;
@@ -150,11 +158,11 @@ namespace pong
         wgpu::VertexAttribute &positionAttribute = attributes[0];
         positionAttribute.shaderLocation = 0;
         positionAttribute.offset = 0;
-        positionAttribute.format = wgpu::VertexFormat::Float32x2;
+        positionAttribute.format = wgpu::VertexFormat::Float32x3;
 
         wgpu::VertexAttribute &colorAttribute = attributes[1];
         colorAttribute.shaderLocation = 1;
-        colorAttribute.offset = 2 * sizeof(float);
+        colorAttribute.offset = sizeof(glm::vec3);
         colorAttribute.format = wgpu::VertexFormat::Float32x3;
 
         vertexBufferLayout.attributeCount = attributes.size();
@@ -168,14 +176,12 @@ namespace pong
         pipelineDesc.vertex.constantCount = 0;
         pipelineDesc.vertex.constants = nullptr;
 
-        std::cout << "  Initializing WebGPU primitive state" << std::endl;
         // Primitive state.
         pipelineDesc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
         pipelineDesc.primitive.stripIndexFormat = wgpu::IndexFormat::Undefined;
         pipelineDesc.primitive.frontFace = wgpu::FrontFace::CCW;
         pipelineDesc.primitive.cullMode = wgpu::CullMode::None;
 
-        std::cout << "  Initializing WebGPU depth stencil state" << std::endl;
         // Fragment and blend state.
         wgpu::FragmentState fragmentState;
         fragmentState.module = shaderModule;
@@ -198,10 +204,18 @@ namespace pong
 
         pipelineDesc.fragment = &fragmentState;
 
-        // Disable depth/stencil testing.
-        pipelineDesc.depthStencil = nullptr;
+        // Depth testing.
+        wgpu::DepthStencilState depthStencilState = {};
+        depthStencilState.depthCompare = wgpu::CompareFunction::Less;
+        depthStencilState.depthWriteEnabled = true;
+        depthStencilState.format = c_depthFormat;
 
-        std::cout << "  Initializing WebGPU multisample state" << std::endl;
+        // Deactivate the stencil alltogether
+        depthStencilState.stencilReadMask = 0;
+        depthStencilState.stencilWriteMask = 0;
+
+        pipelineDesc.depthStencil = &depthStencilState;
+
         // Multisampling is disabled.
         pipelineDesc.multisample.count = 1;
         pipelineDesc.multisample.mask = ~0u;
@@ -214,6 +228,7 @@ namespace pong
         bindingLayout.visibility = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
         bindingLayout.buffer.type = wgpu::BufferBindingType::Uniform;
         bindingLayout.buffer.minBindingSize = sizeof(Uniforms);
+        bindingLayout.buffer.hasDynamicOffset = true;
 
         wgpu::BindGroupLayoutDescriptor bindGroupLayoutDesc{};
         bindGroupLayoutDesc.entryCount = 1;
@@ -234,17 +249,52 @@ namespace pong
         return m_pipeline != nullptr;
     }
 
+    bool Renderer::InitializeDepthTexture()
+    {
+        std::cout << "Initializing WebGPU depth texture" << std::endl;
+
+        wgpu::TextureDescriptor textureDesc{};
+        textureDesc.dimension = wgpu::TextureDimension::e2D;
+        textureDesc.format = c_depthFormat;
+        textureDesc.mipLevelCount = 1;
+        textureDesc.sampleCount = 1;
+        textureDesc.size.width = 640;
+        textureDesc.size.height = 480;
+        textureDesc.size.depthOrArrayLayers = 1;
+        textureDesc.usage = wgpu::TextureUsage::RenderAttachment;
+        textureDesc.viewFormatCount = 1;
+        textureDesc.viewFormats = &c_depthFormat;
+
+        m_depthTexture = m_device.CreateTexture(&textureDesc);
+
+        wgpu::TextureViewDescriptor textureViewDesc{};
+        textureViewDesc.dimension = wgpu::TextureViewDimension::e2D;
+        textureViewDesc.format = c_depthFormat;
+        textureViewDesc.baseMipLevel = 0;
+        textureViewDesc.mipLevelCount = 1;
+        textureViewDesc.baseArrayLayer = 0;
+        textureViewDesc.arrayLayerCount = 1;
+        textureViewDesc.aspect = wgpu::TextureAspect::DepthOnly;
+
+        m_depthTextureView = m_depthTexture.CreateView(&textureViewDesc);
+
+        return m_depthTexture != nullptr;
+    }
+
     bool Renderer::InitializeGeometry()
     {
-        m_model = Model::Create(m_device, m_queue, "assets/models/pong.obj");
+        std::cout << "Initializing WebGPU geometry" << std::endl;
+        m_model = Model::Create(m_device, m_queue, "./dist/pong.dat");
         return m_model != nullptr;
     }
 
     bool Renderer::InitializeUniforms()
     {
+        std::cout << "Initializing WebGPU uniforms" << std::endl;
         // Create uniform buffer
         wgpu::BufferDescriptor bufferDesc{};
-        bufferDesc.size = sizeof(Uniforms);
+        const size_t bufferStride = CeilToNextMultiple(sizeof(Uniforms), c_minUniformBufferOffsetAlignment);
+        bufferDesc.size = bufferStride + sizeof(Uniforms);
         bufferDesc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Uniform;
         bufferDesc.mappedAtCreation = false;
 
@@ -273,10 +323,22 @@ namespace pong
 
     void Renderer::Render()
     {
+        static uint8_t frameIndex = 0; // 0 or 1
+        frameIndex = (frameIndex + 1) % 2;
+
         static std::chrono::steady_clock::time_point startTime = std::chrono::steady_clock::now();
         std::chrono::steady_clock::time_point currentTime = std::chrono::steady_clock::now();
         float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-        m_queue.WriteBuffer(m_uniformBuffer, 0, &time, sizeof(Uniforms));
+
+        Uniforms uniforms;
+        uniforms.time = time;
+
+        uniforms.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+        const size_t uniformBufferStride = CeilToNextMultiple(sizeof(Uniforms), c_minUniformBufferOffsetAlignment);
+        m_queue.WriteBuffer(m_uniformBuffer, 0, &uniforms, sizeof(Uniforms));
+
+        // m_queue.WriteBuffer(m_uniformBuffer, uniformBufferStride, &uniforms, sizeof(Uniforms));
 
         wgpu::TextureView nextTexture = m_swapChain.GetCurrentTextureView();
         if (!nextTexture)
@@ -297,7 +359,21 @@ namespace pong
         renderPassDesc.colorAttachmentCount = 1;
         renderPassDesc.colorAttachments = &renderPassColorAttachment;
 
-        renderPassDesc.depthStencilAttachment = nullptr;
+        wgpu::RenderPassDepthStencilAttachment renderPassDepthStencilAttachment;
+        renderPassDepthStencilAttachment.view = m_depthTextureView;
+        renderPassDepthStencilAttachment.depthLoadOp = wgpu::LoadOp::Clear;
+        renderPassDepthStencilAttachment.depthStoreOp = wgpu::StoreOp::Store;
+        renderPassDepthStencilAttachment.depthClearValue = 1.0f;
+        renderPassDepthStencilAttachment.depthReadOnly = false;
+
+        // Stencil is not used
+        renderPassDepthStencilAttachment.stencilStoreOp = wgpu::StoreOp::Undefined;
+        renderPassDepthStencilAttachment.stencilLoadOp = wgpu::LoadOp::Undefined;
+        renderPassDepthStencilAttachment.stencilClearValue = 0;
+        renderPassDepthStencilAttachment.stencilReadOnly = true;
+
+        renderPassDesc.depthStencilAttachment = &renderPassDepthStencilAttachment;
+
         renderPassDesc.timestampWrites = nullptr;
         wgpu::RenderPassEncoder renderPass = encoder.BeginRenderPass(&renderPassDesc);
 
@@ -307,11 +383,16 @@ namespace pong
         renderPass.SetVertexBuffer(0, m_model->GetVertexBuffer(), 0, vertexCount * 5 * sizeof(float));
 
         size_t indexCount = m_model->GetIndexCount();
-        renderPass.SetIndexBuffer(m_model->GetIndexBuffer(), wgpu::IndexFormat::Uint16, 0, indexCount * sizeof(uint16_t));
+        renderPass.SetIndexBuffer(m_model->GetIndexBuffer(), wgpu::IndexFormat::Uint32, 0, indexCount * sizeof(uint32_t));
 
-        renderPass.SetBindGroup(0, m_bindGroup);
+        uint32_t dynamicOffset = 0;
 
+        renderPass.SetBindGroup(0, m_bindGroup, 1, &dynamicOffset);
         renderPass.DrawIndexed(indexCount);
+
+        // dynamicOffset = static_cast<uint32_t>(uniformBufferStride);
+        // renderPass.SetBindGroup(0, m_bindGroup, 1, &dynamicOffset);
+        // renderPass.DrawIndexed(indexCount);
 
         renderPass.End();
 

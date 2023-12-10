@@ -1,38 +1,52 @@
 #include "pong/Model.h"
 
 #include <array>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <vector>
+#include <stdio.h>
 
 namespace pong
 {
     std::unique_ptr<Model> Model::Create(const wgpu::Device &device, const wgpu::Queue &queue, const std::string &path)
     {
-        // clang-format off
-        std::array<float, 30> vertexData = {
-            // x,   y,     r,   g,   b
-            -0.5, -0.5,   1.0, 0.0, 0.0,
-            +0.5, -0.5,   0.0, 1.0, 0.0,
-            +0.5, +0.5,   0.0, 0.0, 1.0,
-            -0.5, +0.5,   1.0, 1.0, 0.0
-        };
-        // clang-format on
-        int vertexCount = static_cast<int>(vertexData.size() / 5);
+        std::ifstream file(path, std::ios::binary);
+
+        if (!file.is_open())
+        {
+            std::cout << "Failed to open file: " << path << std::endl;
+            return nullptr;
+        }
+
+        static_assert(sizeof(Vertex) == 6 * sizeof(float), "Vertex size is not 6 floats");
+
+        // Read vertex data
+        uint32_t vertexCount = 0;
+        file.read(reinterpret_cast<char *>(&vertexCount), sizeof(vertexCount));
+        std::cout << "Vertex count: " << vertexCount << std::endl;
+        std::vector<Vertex> vertexData(vertexCount);
+        file.read(reinterpret_cast<char *>(vertexData.data()), vertexCount * sizeof(Vertex));
+
+        // Read index data
+        uint32_t indexCount = 0;
+        file.read(reinterpret_cast<char *>(&indexCount), sizeof(indexCount));
+        std::cout << "Index count: " << indexCount << std::endl;
+        std::vector<uint32_t> indexData(indexCount);
+        file.read(reinterpret_cast<char *>(indexData.data()), indexCount * sizeof(uint32_t));
+
+        file.close();
 
         // Create vertex buffer
         wgpu::BufferDescriptor bufferDesc;
-        bufferDesc.size = vertexData.size() * sizeof(float);
+        bufferDesc.size = vertexData.size() * sizeof(Vertex);
         bufferDesc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Vertex;
         bufferDesc.mappedAtCreation = false;
         wgpu::Buffer vertexBuffer = device.CreateBuffer(&bufferDesc);
 
         queue.WriteBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
 
-        // Create index buffer
-        std::array<uint16_t, 6> indexData = {
-            0, 1, 2, // Triangle #0
-            0, 2, 3  // Triangle #1
-        };
-
-        bufferDesc.size = indexData.size() * sizeof(uint16_t);
+        bufferDesc.size = indexData.size() * sizeof(uint32_t);
         bufferDesc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Index;
         wgpu::Buffer indexBuffer = device.CreateBuffer(&bufferDesc);
 

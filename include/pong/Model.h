@@ -1,5 +1,6 @@
 #pragma once
 
+#include <glm/glm.hpp>
 #include <webgpu/webgpu_cpp.h>
 
 #include <string>
@@ -15,6 +16,12 @@ namespace pong
         size_t m_indexCount;
 
     public:
+        struct Vertex
+        {
+            glm::vec3 position;
+            glm::vec3 color;
+        };
+
         Model() {}
         Model(const wgpu::Buffer &vertexBuffer, size_t vertexCount, const wgpu::Buffer &indexBuffer, size_t indexCount)
             : m_vertexBuffer(vertexBuffer), m_vertexCount(vertexCount), m_indexBuffer(indexBuffer), m_indexCount(indexCount) {}

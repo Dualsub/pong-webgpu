@@ -1,7 +1,5 @@
 #include "pong/Application.h"
 
-#define __EMSCRIPTEN__ 1
-
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
 #include <webgpu/webgpu_cpp.h>

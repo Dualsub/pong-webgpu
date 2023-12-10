@@ -1,6 +1,9 @@
+*.dylib
+
 .vscode/
 
 build/
 build-web/
 
+scripts/.venv/
 **/__pycache__/
