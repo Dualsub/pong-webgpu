@@ -8,6 +8,7 @@ add_executable(pong
 "src/pong/Renderer.cpp"
 "src/pong/Model.cpp"
 "src/pong/Device.cpp"
+"src/pong/Game.cpp"
 )
 
 target_include_directories(pong PRIVATE "include")
@@ -21,11 +22,12 @@ if(EMSCRIPTEN)
   set_target_properties(pong PROPERTIES SUFFIX ".html")
   # Add Emscripten-specific link options
   target_link_options(pong PRIVATE
-  --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/res/dist@/dist
+  --embed-file ${CMAKE_CURRENT_SOURCE_DIR}/res/dist@/dist
   -sUSE_GLFW=3
   -sUSE_WEBGPU
   -sASYNCIFY
   -sFORCE_FILESYSTEM=1
+  -O3
   )
 else()
   set(DAWN_FETCH_DEPENDENCIES ON)

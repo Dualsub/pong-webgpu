@@ -31,12 +31,15 @@ namespace pong
             return;
         }
 
+        Initialize();
+
 #if defined(__EMSCRIPTEN__)
         emscripten_set_main_loop_arg(
             [](void *arg)
             {
                 auto *app = reinterpret_cast<Application *>(arg);
-                app->m_renderer.Render();
+                app->Update(float(1.0f / c_fps));
+                app->Render();
             },
             this, c_fps, true);
 #else
@@ -47,4 +50,25 @@ namespace pong
         }
 #endif
     }
+
+    void Application::Initialize()
+    {
+        m_game.Initialize(m_renderer);
+    }
+
+    void Application::Update(float deltaTime)
+    {
+        m_game.Update(deltaTime);
+    }
+
+    void Application::Render()
+    {
+        m_game.Render(m_renderer);
+        m_renderer.Render();
+    }
+
+    void Application::Terminate()
+    {
+    }
+
 }

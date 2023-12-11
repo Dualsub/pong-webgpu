@@ -15,11 +15,11 @@ namespace pong
 
         if (!file.is_open())
         {
-            std::cout << "Failed to open file: " << path << std::endl;
+            // std::cout << "Failed to open file: " << path << std::endl;
             return nullptr;
         }
 
-        static_assert(sizeof(Vertex) == 6 * sizeof(float), "Vertex size is not 6 floats");
+        static_assert(sizeof(Vertex) == 9 * sizeof(float), "Vertex size is not 9 floats");
 
         // Read vertex data
         uint32_t vertexCount = 0;

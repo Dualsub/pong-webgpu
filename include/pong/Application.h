@@ -1,5 +1,6 @@
 #pragma once
 #include "pong/Renderer.h"
+#include "pong/Game.h"
 
 #include <iostream>
 #include <cassert>
@@ -11,7 +12,9 @@ namespace pong
     private:
         static const uint32_t c_fps = 60;
         static Application *s_instance;
+
         Renderer m_renderer;
+        Game m_game;
 
     public:
         Application()
@@ -27,12 +30,10 @@ namespace pong
 
         static Application *GetInstance() { return s_instance; }
 
-        // For Emscripten
-        static void Render()
-        {
-            assert(s_instance);
-            s_instance->m_renderer.Render();
-        }
+        void Initialize();
+        void Update(float deltaTime);
+        void Render();
+        void Terminate();
 
         void Run(const DeviceContext &context);
     };

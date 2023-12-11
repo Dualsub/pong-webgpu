@@ -1,5 +1,8 @@
 #include "pong/Renderer.h"
 
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/ext.hpp>
 #include <webgpu/webgpu_cpp.h>
 
 #include <cassert>
@@ -11,18 +14,21 @@ namespace pong
     const char *shaderSource = R"(
     struct VertexInput {
         @location(0) position: vec3f,
-        @location(1) color: vec3f,
+        @location(1) normal: vec3f,
+        @location(2) color: vec3f,
     };
 
     struct VertexOutput {
         @builtin(position) position: vec4f,
         @location(0) color: vec3f,
+        @location(1) normal: vec3f,
     };
 
     struct Uniforms {
         model: mat4x4<f32>,
         view: mat4x4<f32>,
         projection: mat4x4<f32>,
+        light: vec3<f32>,
         time: f32,
     };
 
@@ -34,13 +40,16 @@ namespace pong
         var position = vec4f(in.position, 1.0);
         out.position = uUniforms.projection * uUniforms.view * uUniforms.model * position;
         out.color = in.color;
+        out.normal = in.normal;
         return out;
     }
 
     @fragment
     fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-        let linear_color = pow(in.color, vec3f(2.2));
-        return vec4f(linear_color, 1.0);
+        // let linear_color = pow(in.color, vec3f(2.2));
+        // return vec4f(linear_color, 1.0);
+        let light = dot(normalize(in.normal), normalize(vec3f(-uUniforms.light))) * 0.5 + 0.5;
+        return vec4f(in.color * light, 1.0);
     }
 
     )";
@@ -120,8 +129,8 @@ namespace pong
     {
         std::cout << "Initializing WebGPU swap chain" << std::endl;
         wgpu::SwapChainDescriptor swapChainDesc;
-        swapChainDesc.width = 640;
-        swapChainDesc.height = 480;
+        swapChainDesc.width = m_width;
+        swapChainDesc.height = m_height;
         swapChainDesc.usage = wgpu::TextureUsage::RenderAttachment;
         swapChainDesc.format = wgpu::TextureFormat::BGRA8Unorm;
         swapChainDesc.presentMode = wgpu::PresentMode::Fifo;
@@ -146,23 +155,28 @@ namespace pong
         // Connect the chain
         shaderDesc.nextInChain = &shaderCodeDesc;
         shaderCodeDesc.code = shaderSource;
-        auto shaderModule = m_device.CreateShaderModule(&shaderDesc);
+        m_shaderModule = m_device.CreateShaderModule(&shaderDesc);
 
         // Vertex state.
         wgpu::VertexBufferLayout vertexBufferLayout;
         vertexBufferLayout.arrayStride = sizeof(Model::Vertex);
         vertexBufferLayout.stepMode = wgpu::VertexStepMode::Vertex;
 
-        std::array<wgpu::VertexAttribute, 2> attributes;
+        std::array<wgpu::VertexAttribute, 3> attributes;
 
         wgpu::VertexAttribute &positionAttribute = attributes[0];
         positionAttribute.shaderLocation = 0;
         positionAttribute.offset = 0;
         positionAttribute.format = wgpu::VertexFormat::Float32x3;
 
-        wgpu::VertexAttribute &colorAttribute = attributes[1];
-        colorAttribute.shaderLocation = 1;
-        colorAttribute.offset = sizeof(glm::vec3);
+        wgpu::VertexAttribute &normalAttribute = attributes[1];
+        normalAttribute.shaderLocation = 1;
+        normalAttribute.offset = sizeof(glm::vec3);
+        normalAttribute.format = wgpu::VertexFormat::Float32x3;
+
+        wgpu::VertexAttribute &colorAttribute = attributes[2];
+        colorAttribute.shaderLocation = 2;
+        colorAttribute.offset = sizeof(glm::vec3) * 2;
         colorAttribute.format = wgpu::VertexFormat::Float32x3;
 
         vertexBufferLayout.attributeCount = attributes.size();
@@ -171,7 +185,7 @@ namespace pong
         pipelineDesc.vertex.bufferCount = 1;
         pipelineDesc.vertex.buffers = &vertexBufferLayout;
 
-        pipelineDesc.vertex.module = shaderModule;
+        pipelineDesc.vertex.module = m_shaderModule;
         pipelineDesc.vertex.entryPoint = "vs_main";
         pipelineDesc.vertex.constantCount = 0;
         pipelineDesc.vertex.constants = nullptr;
@@ -184,7 +198,7 @@ namespace pong
 
         // Fragment and blend state.
         wgpu::FragmentState fragmentState;
-        fragmentState.module = shaderModule;
+        fragmentState.module = m_shaderModule;
         fragmentState.entryPoint = "fs_main";
         fragmentState.constantCount = 0;
         fragmentState.constants = nullptr;
@@ -244,22 +258,21 @@ namespace pong
 
         // Create the pipeline.
         m_pipeline = m_device.CreateRenderPipeline(&pipelineDesc);
-        std::cout << "  Initializing WebGPU pipeline" << std::endl;
 
         return m_pipeline != nullptr;
     }
 
     bool Renderer::InitializeDepthTexture()
     {
-        std::cout << "Initializing WebGPU depth texture" << std::endl;
+        // std::cout << "Initializing WebGPU depth texture" << std::endl;
 
         wgpu::TextureDescriptor textureDesc{};
         textureDesc.dimension = wgpu::TextureDimension::e2D;
         textureDesc.format = c_depthFormat;
         textureDesc.mipLevelCount = 1;
         textureDesc.sampleCount = 1;
-        textureDesc.size.width = 640;
-        textureDesc.size.height = 480;
+        textureDesc.size.width = m_width;
+        textureDesc.size.height = m_height;
         textureDesc.size.depthOrArrayLayers = 1;
         textureDesc.usage = wgpu::TextureUsage::RenderAttachment;
         textureDesc.viewFormatCount = 1;
@@ -284,8 +297,7 @@ namespace pong
     bool Renderer::InitializeGeometry()
     {
         std::cout << "Initializing WebGPU geometry" << std::endl;
-        m_model = Model::Create(m_device, m_queue, "./dist/pong.dat");
-        return m_model != nullptr;
+        return true;
     }
 
     bool Renderer::InitializeUniforms()
@@ -323,8 +335,6 @@ namespace pong
 
     void Renderer::Render()
     {
-        static uint8_t frameIndex = 0; // 0 or 1
-        frameIndex = (frameIndex + 1) % 2;
 
         static std::chrono::steady_clock::time_point startTime = std::chrono::steady_clock::now();
         std::chrono::steady_clock::time_point currentTime = std::chrono::steady_clock::now();
@@ -333,12 +343,7 @@ namespace pong
         Uniforms uniforms;
         uniforms.time = time;
 
-        uniforms.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-
         const size_t uniformBufferStride = CeilToNextMultiple(sizeof(Uniforms), c_minUniformBufferOffsetAlignment);
-        m_queue.WriteBuffer(m_uniformBuffer, 0, &uniforms, sizeof(Uniforms));
-
-        // m_queue.WriteBuffer(m_uniformBuffer, uniformBufferStride, &uniforms, sizeof(Uniforms));
 
         wgpu::TextureView nextTexture = m_swapChain.GetCurrentTextureView();
         if (!nextTexture)
@@ -379,20 +384,24 @@ namespace pong
 
         renderPass.SetPipeline(m_pipeline);
 
-        size_t vertexCount = m_model->GetVertexCount();
-        renderPass.SetVertexBuffer(0, m_model->GetVertexBuffer(), 0, vertexCount * 5 * sizeof(float));
+        for (auto &&batch : m_batches)
+        {
+            Model *model = batch.model;
+            size_t vertexCount = model->GetVertexCount();
+            renderPass.SetVertexBuffer(0, model->GetVertexBuffer(), 0, vertexCount * 5 * sizeof(float));
 
-        size_t indexCount = m_model->GetIndexCount();
-        renderPass.SetIndexBuffer(m_model->GetIndexBuffer(), wgpu::IndexFormat::Uint32, 0, indexCount * sizeof(uint32_t));
+            size_t indexCount = model->GetIndexCount();
+            renderPass.SetIndexBuffer(model->GetIndexBuffer(), wgpu::IndexFormat::Uint32, 0, indexCount * sizeof(uint32_t));
 
-        uint32_t dynamicOffset = 0;
-
-        renderPass.SetBindGroup(0, m_bindGroup, 1, &dynamicOffset);
-        renderPass.DrawIndexed(indexCount);
-
-        // dynamicOffset = static_cast<uint32_t>(uniformBufferStride);
-        // renderPass.SetBindGroup(0, m_bindGroup, 1, &dynamicOffset);
-        // renderPass.DrawIndexed(indexCount);
+            for (uint32_t i = 0; i < batch.transforms.size(); i++)
+            {
+                uint32_t dynamicOffset = i * uniformBufferStride;
+                uniforms.model = batch.transforms[i];
+                m_queue.WriteBuffer(m_uniformBuffer, dynamicOffset, &uniforms, sizeof(Uniforms));
+                renderPass.SetBindGroup(0, m_bindGroup, 1, &dynamicOffset);
+                renderPass.DrawIndexed(indexCount);
+            }
+        }
 
         renderPass.End();
 
@@ -406,6 +415,8 @@ namespace pong
         m_swapChain.Present();
         m_device.Tick();
 #endif
+
+        m_batches.clear();
     }
 
     void Renderer::Tick()
