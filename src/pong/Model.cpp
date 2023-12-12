@@ -55,8 +55,8 @@ namespace pong
 
         return std::make_unique<Model>(
             vertexBuffer,
-            vertexData.size() / 5,
+            vertexCount,
             indexBuffer,
-            indexData.size());
+            indexCount);
     }
 }

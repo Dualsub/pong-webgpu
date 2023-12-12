@@ -388,7 +388,7 @@ namespace pong
         {
             Model *model = batch.model;
             size_t vertexCount = model->GetVertexCount();
-            renderPass.SetVertexBuffer(0, model->GetVertexBuffer(), 0, vertexCount * 5 * sizeof(float));
+            renderPass.SetVertexBuffer(0, model->GetVertexBuffer(), 0, vertexCount * sizeof(Model::Vertex));
 
             size_t indexCount = model->GetIndexCount();
             renderPass.SetIndexBuffer(model->GetIndexBuffer(), wgpu::IndexFormat::Uint32, 0, indexCount * sizeof(uint32_t));
