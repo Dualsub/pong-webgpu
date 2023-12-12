@@ -8,6 +8,7 @@ add_executable(pong
 "src/pong/Renderer.cpp"
 "src/pong/Model.cpp"
 "src/pong/Device.cpp"
+"src/pong/Connection.cpp"
 "src/pong/Game.cpp"
 )
 
@@ -27,6 +28,7 @@ if(EMSCRIPTEN)
   -sUSE_WEBGPU
   -sASYNCIFY
   -sFORCE_FILESYSTEM=1
+  -lwebsocket.js
   -O3
   )
 else()

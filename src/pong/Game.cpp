@@ -2,11 +2,18 @@
 
 #include "pong/Renderer.h"
 
+#include <emscripten/emscripten.h>
+#include <emscripten/websocket.h>
+
+#include <iostream>
+#include <stdio.h>
+
 namespace pong
 {
     void Game::Initialize(Renderer &renderer)
     {
         m_tableModel = renderer.CreateModel("./dist/pong.dat");
+        m_connection.Initialize(0);
     }
 
     void Game::Update(float deltaTime)
@@ -15,7 +22,13 @@ namespace pong
         std::chrono::steady_clock::time_point currentTime = std::chrono::steady_clock::now();
         float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-        m_table.transform.SetMatrix(glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
+        GameStateMessage *msg = m_connection.GetLatestMessage();
+        if (msg == nullptr)
+        {
+            return;
+        }
+
+        m_table.transform.position = glm::vec3(msg->ball.position.x / 10.0f, 0.0f, msg->ball.position.y / 10.0f);
     }
 
     void Game::Render(Renderer &renderer)
