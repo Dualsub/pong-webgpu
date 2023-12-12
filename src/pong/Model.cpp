@@ -15,7 +15,7 @@ namespace pong
 
         if (!file.is_open())
         {
-            // std::cout << "Failed to open file: " << path << std::endl;
+            std::cout << "Failed to open file: " << path << std::endl;
             return nullptr;
         }
 

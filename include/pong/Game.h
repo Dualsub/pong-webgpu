@@ -1,5 +1,6 @@
 #pragma once
 
+#include "pong/Connection.h"
 #include "pong/Model.h"
 
 #include <glm/glm.hpp>
@@ -50,6 +51,8 @@ namespace pong
     class Game
     {
     private:
+        Connection m_connection;
+
         std::vector<EPlayer> m_players;
         EBall m_ball;
         ETable m_table;
