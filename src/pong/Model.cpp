@@ -59,4 +59,41 @@ namespace pong
             indexBuffer,
             indexCount);
     }
+
+    std::unique_ptr<Model> Model::CreateQuad(const wgpu::Device &device, const wgpu::Queue &queue, const glm::vec2 &size, const glm::vec3 &color)
+    {
+        float width = size.x / 2.0f;
+        float height = size.y / 2.0f;
+        // Top left is origin
+        std::vector<Vertex> vertices = {
+            {{-width, 0.0f, -height}, {0.0f, 1.0f, 0.0f}, color},
+            {{-width, 0.0f, height}, {0.0f, 1.0f, 0.0f}, color},
+            {{width, 0.0f, height}, {0.0f, 1.0f, 0.0f}, color},
+            {{width, 0.0f, -height}, {0.0f, 1.0f, 0.0f}, color}};
+        std::vector<uint32_t> indices = {
+            0, 1, 2,
+            0, 2, 3};
+
+        // Create vertex buffer
+        wgpu::BufferDescriptor bufferDesc;
+        bufferDesc.size = vertices.size() * sizeof(Vertex);
+        bufferDesc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Vertex;
+        bufferDesc.mappedAtCreation = false;
+        wgpu::Buffer vertexBuffer = device.CreateBuffer(&bufferDesc);
+
+        queue.WriteBuffer(vertexBuffer, 0, vertices.data(), bufferDesc.size);
+
+        bufferDesc.size = indices.size() * sizeof(uint32_t);
+        bufferDesc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Index;
+        wgpu::Buffer indexBuffer = device.CreateBuffer(&bufferDesc);
+
+        // Upload geometry data to the buffer
+        queue.WriteBuffer(indexBuffer, 0, indices.data(), bufferDesc.size);
+
+        return std::make_unique<Model>(
+            vertexBuffer,
+            vertices.size(),
+            indexBuffer,
+            indices.size());
+    }
 }

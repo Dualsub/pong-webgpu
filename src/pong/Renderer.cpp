@@ -296,7 +296,7 @@ namespace pong
 
     bool Renderer::InitializeGeometry()
     {
-        std::cout << "Initializing WebGPU geometry" << std::endl;
+        // std::cout << "Initializing WebGPU geometry" << std::endl;
         return true;
     }
 
@@ -306,7 +306,7 @@ namespace pong
         // Create uniform buffer
         wgpu::BufferDescriptor bufferDesc{};
         const size_t bufferStride = CeilToNextMultiple(sizeof(Uniforms), c_minUniformBufferOffsetAlignment);
-        bufferDesc.size = bufferStride + sizeof(Uniforms);
+        bufferDesc.size = 5 * bufferStride;
         bufferDesc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Uniform;
         bufferDesc.mappedAtCreation = false;
 
@@ -335,12 +335,11 @@ namespace pong
 
     void Renderer::Render()
     {
-
         static std::chrono::steady_clock::time_point startTime = std::chrono::steady_clock::now();
         std::chrono::steady_clock::time_point currentTime = std::chrono::steady_clock::now();
         float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-        Uniforms uniforms;
+        Uniforms uniforms = m_uniforms;
         uniforms.time = time;
 
         const size_t uniformBufferStride = CeilToNextMultiple(sizeof(Uniforms), c_minUniformBufferOffsetAlignment);
@@ -384,31 +383,35 @@ namespace pong
 
         renderPass.SetPipeline(m_pipeline);
 
+        uint32_t index = 0;
         for (auto &&batch : m_batches)
         {
             Model *model = batch.model;
+            if (model == nullptr)
+            {
+                continue;
+            }
+
             size_t vertexCount = model->GetVertexCount();
             renderPass.SetVertexBuffer(0, model->GetVertexBuffer(), 0, vertexCount * sizeof(Model::Vertex));
 
             size_t indexCount = model->GetIndexCount();
             renderPass.SetIndexBuffer(model->GetIndexBuffer(), wgpu::IndexFormat::Uint32, 0, indexCount * sizeof(uint32_t));
 
-            for (uint32_t i = 0; i < batch.transforms.size(); i++)
+            for (auto &&transform : batch.transforms)
             {
-                uint32_t dynamicOffset = i * uniformBufferStride;
-                uniforms.model = batch.transforms[i];
+                uint32_t dynamicOffset = index * uniformBufferStride;
+                uniforms.model = transform;
                 m_queue.WriteBuffer(m_uniformBuffer, dynamicOffset, &uniforms, sizeof(Uniforms));
                 renderPass.SetBindGroup(0, m_bindGroup, 1, &dynamicOffset);
                 renderPass.DrawIndexed(indexCount);
+                index++;
             }
         }
 
         renderPass.End();
 
-        wgpu::CommandBufferDescriptor cmdBufferDescriptor;
-        cmdBufferDescriptor.label = "Command Buffer";
-        wgpu::CommandBuffer command = encoder.Finish(&cmdBufferDescriptor);
-
+        wgpu::CommandBuffer command = encoder.Finish();
         m_queue.Submit(1, &command);
 
 #ifndef __EMSCRIPTEN__

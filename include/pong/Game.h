@@ -20,6 +20,11 @@ namespace pong
         CTransform(const glm::vec3 &position, const glm::quat &rotation)
             : position(position), rotation(rotation) {}
 
+        CTransform(const glm::mat4 &matrix)
+        {
+            SetMatrix(matrix);
+        }
+
         glm::mat4 GetMatrix() const
         {
             return glm::translate(glm::mat4(1.0f), position) * glm::mat4_cast(rotation);
@@ -48,19 +53,32 @@ namespace pong
         CTransform transform;
     };
 
+    struct ECamera
+    {
+        CTransform transform;
+    };
+
     class Game
     {
     private:
+        // Scaling will effect the physics, ball and players will be squished
+        const glm::vec2 c_scaleFactor = glm::vec2(1.0f / 3.95f, 1.0f / 3.95f);
+        const float c_arenaWidth = 800.0f * c_scaleFactor.x;
+        const float c_arenaHeight = 600.0f * c_scaleFactor.y;
         Connection m_connection;
 
         std::vector<EPlayer> m_players;
         EBall m_ball;
-        ETable m_table;
+        ETable m_table = {{glm::vec3(c_arenaWidth / 2.0f, -79.0f, c_arenaHeight / 2.0f), glm::quat(glm::vec3(0.0f, glm::radians(90.0f), 0.0f))}};
+        ECamera m_camera = {{glm::lookAt(glm::vec3(c_arenaWidth / 2.0f, 300.0f, -c_arenaHeight / 2.0f),
+                                         glm::vec3(c_arenaWidth / 2.0f, 0.0f, c_arenaHeight / 2.0f),
+                                         glm::vec3(0.0f, 1.0f, 0.0f))}};
 
         // Graphics
         std::unique_ptr<Model> m_ballModel;
         std::unique_ptr<Model> m_paddelModel;
         std::unique_ptr<Model> m_tableModel;
+        std::unique_ptr<Model> m_debugPlane;
 
     public:
         Game() = default;

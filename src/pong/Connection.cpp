@@ -43,7 +43,7 @@ namespace pong
             exit(1);
         }
 
-        std::string url = "wss://www.kurskollen.se/play?id=" + std::to_string(gameId);
+        std::string url = "ws://localhost:5000/play?id=" + std::to_string(gameId);
 
         EmscriptenWebSocketCreateAttributes wsAttrs = {
             url.c_str(),
@@ -97,6 +97,8 @@ namespace pong
         {
             m_messages.erase(m_messages.begin());
         }
+
+        assert(m_messages.size() <= c_maxMessages);
     }
 
     void Connection::SendInput(bool upPressed, bool downPressed)

@@ -34,5 +34,6 @@ namespace pong
         size_t GetIndexCount() { return m_indexCount; }
 
         static std::unique_ptr<Model> Create(const wgpu::Device &device, const wgpu::Queue &queue, const std::string &path);
+        static std::unique_ptr<Model> CreateQuad(const wgpu::Device &device, const wgpu::Queue &queue, const glm::vec2 &size, const glm::vec3 &color);
     };
 }
