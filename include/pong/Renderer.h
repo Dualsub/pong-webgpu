@@ -44,6 +44,7 @@ namespace pong
         const size_t c_minUniformBufferOffsetAlignment = 64;
         const static uint32_t c_width = 1060;
         const static uint32_t c_height = 600;
+        const std::string c_canvasSelector = "#canvas";
 
         // Window
         uint32_t m_width = c_width;
@@ -94,6 +95,8 @@ namespace pong
         void Run(void (*mainLoopCallback)(void));
 
         bool Initialize(const DeviceContext &context);
+
+        void OnResize(uint32_t width, uint32_t height);
 
         void SubmitInstances(Model *model, const std::vector<glm::mat4> &transforms)
         {

@@ -4,6 +4,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/ext.hpp>
 #include <webgpu/webgpu_cpp.h>
+#include <emscripten/emscripten.h>
 
 #include <cassert>
 #include <iostream>
@@ -116,7 +117,7 @@ namespace pong
     {
         std::cout << "Initializing WebGPU surface" << std::endl;
         wgpu::SurfaceDescriptorFromCanvasHTMLSelector canvasDesc{};
-        canvasDesc.selector = "#canvas";
+        canvasDesc.selector = c_canvasSelector.c_str();
 
         wgpu::SurfaceDescriptor surfaceDesc;
         surfaceDesc.nextInChain = &canvasDesc;
@@ -331,6 +332,13 @@ namespace pong
         m_bindGroup = m_device.CreateBindGroup(&bindGroupDesc);
 
         return m_bindGroup != nullptr;
+    }
+
+    void Renderer::OnResize(uint32_t width, uint32_t height)
+    {
+        std::cout << "Resizing WebGPU surface to " << width << "x" << height << std::endl;
+        m_width = width;
+        m_height = height;
     }
 
     void Renderer::Render()

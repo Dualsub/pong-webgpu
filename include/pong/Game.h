@@ -5,11 +5,26 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <vector>
 
 namespace pong
 {
+    // Scaling will effect the physics, ball and players will be squished
+    static constexpr glm::vec2 c_scaleFactor = glm::vec2(1.0f / 3.95f, 1.0f / 3.95f);
+    static constexpr float c_arenaWidth = 800.0f * c_scaleFactor.x;
+    static constexpr float c_arenaHeight = 600.0f * c_scaleFactor.y;
+
+    static constexpr float c_padelWidth = 10.0f * c_scaleFactor.x;
+    static constexpr float c_padelHeight = 100.0f * c_scaleFactor.y;
+
+    static constexpr float c_ballRadius = 10.0f * c_scaleFactor.x;
+
+    // Constants for 3D movement
+    static constexpr float c_padelTableHitOffset = 20.0f;
+    static constexpr float c_tabelHitLocation = 0.75f;
+
     // Component types
     struct CTransform
     {
@@ -46,6 +61,7 @@ namespace pong
     struct EBall
     {
         CTransform transform;
+        glm::vec3 velocity;
     };
 
     struct ETable
@@ -61,16 +77,12 @@ namespace pong
     class Game
     {
     private:
-        // Scaling will effect the physics, ball and players will be squished
-        const glm::vec2 c_scaleFactor = glm::vec2(1.0f / 3.95f, 1.0f / 3.95f);
-        const float c_arenaWidth = 800.0f * c_scaleFactor.x;
-        const float c_arenaHeight = 600.0f * c_scaleFactor.y;
         Connection m_connection;
 
         std::vector<EPlayer> m_players;
         EBall m_ball;
         ETable m_table = {{glm::vec3(c_arenaWidth / 2.0f, -79.0f, c_arenaHeight / 2.0f), glm::quat(glm::vec3(0.0f, glm::radians(90.0f), 0.0f))}};
-        ECamera m_camera = {{glm::lookAt(glm::vec3(c_arenaWidth / 2.0f, 300.0f, -c_arenaHeight / 2.0f),
+        ECamera m_camera = {{glm::lookAt(glm::vec3(-c_arenaWidth / 2.0f, 150.0f, c_arenaHeight / 2.0f),
                                          glm::vec3(c_arenaWidth / 2.0f, 0.0f, c_arenaHeight / 2.0f),
                                          glm::vec3(0.0f, 1.0f, 0.0f))}};
 
@@ -79,6 +91,8 @@ namespace pong
         std::unique_ptr<Model> m_paddelModel;
         std::unique_ptr<Model> m_tableModel;
         std::unique_ptr<Model> m_debugPlane;
+
+        float CalculateBallHeight(glm::vec2 position, glm::vec2 velocity);
 
     public:
         Game() = default;

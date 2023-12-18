@@ -25,6 +25,7 @@ namespace pong
     struct Ball
     {
         glm::vec2 position = {};
+        glm::vec2 velocity = {};
     };
 
     struct Events
