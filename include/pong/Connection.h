@@ -51,6 +51,12 @@ namespace pong
         uint64_t timestamp = 0;
     };
 
+    struct InputState
+    {
+        bool upPressed = false;
+        bool downPressed = false;
+    };
+
     class Connection
     {
     private:
@@ -61,6 +67,8 @@ namespace pong
         uint32_t m_sequenceNumber = 0;
         std::mutex m_mutex;
         std::vector<GameStateMessage> m_messages;
+
+        InputState m_inputState;
 
     public:
         Connection() = default;
@@ -73,6 +81,9 @@ namespace pong
         GameStateMessage *GetLatestMessage() const { return m_messages.size() > 0 ? const_cast<GameStateMessage *>(&m_messages.back()) : nullptr; }
         void AddMessage(const GameStateMessage &message);
 
-        void SendInput(bool upPressed, bool downPressed);
+        void SendInput();
+
+        void SendPressedUp(bool pressed);
+        void SendPressedDown(bool pressed);
     };
 }

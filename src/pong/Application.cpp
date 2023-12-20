@@ -31,6 +31,12 @@ namespace pong
             return;
         }
 
+        if (!m_inputDevice.Initialize())
+        {
+            std::cerr << "Failed to initialize input device" << std::endl;
+            return;
+        }
+
         Initialize();
 
 #if defined(__EMSCRIPTEN__)

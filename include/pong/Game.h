@@ -77,12 +77,10 @@ namespace pong
     class Game
     {
     private:
-        Connection m_connection;
-
         std::vector<EPlayer> m_players;
         EBall m_ball;
         ETable m_table = {{glm::vec3(c_arenaWidth / 2.0f, -79.0f, c_arenaHeight / 2.0f), glm::quat(glm::vec3(0.0f, glm::radians(90.0f), 0.0f))}};
-        ECamera m_camera = {{glm::lookAt(glm::vec3(-c_arenaWidth / 2.0f, 150.0f, c_arenaHeight / 2.0f),
+        ECamera m_camera = {{glm::lookAt(glm::vec3(c_arenaWidth / 2.0f, 250.0f, -c_arenaHeight / 2.0f),
                                          glm::vec3(c_arenaWidth / 2.0f, 0.0f, c_arenaHeight / 2.0f),
                                          glm::vec3(0.0f, 1.0f, 0.0f))}};
 

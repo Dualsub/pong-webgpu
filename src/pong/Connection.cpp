@@ -101,14 +101,30 @@ namespace pong
         assert(m_messages.size() <= c_maxMessages);
     }
 
-    void Connection::SendInput(bool upPressed, bool downPressed)
+    void Connection::SendPressedUp(bool pressed)
+    {
+        m_inputState.upPressed = pressed;
+        SendInput();
+    }
+
+    void Connection::SendPressedDown(bool pressed)
+    {
+        m_inputState.downPressed = pressed;
+        SendInput();
+    }
+
+    void Connection::SendInput()
     {
         InputMessage message;
-        message.upPressed = upPressed;
-        message.downPressed = downPressed;
+        message.upPressed = m_inputState.upPressed;
+        message.downPressed = m_inputState.downPressed;
         message.sequenceNumber = m_sequenceNumber++;
         auto now = std::chrono::steady_clock::now();
         message.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+
+        std::cout << "SendInput: "
+                  << "upPressed: " << message.upPressed << ", downPressed: " << message.downPressed << std::endl;
+
         emscripten_websocket_send_binary(m_socket, &message, sizeof(InputMessage));
     }
 }

@@ -1,6 +1,6 @@
 #include "pong/Game.h"
 
-#include "pong/Renderer.h"
+#include "pong/Application.h"
 
 #include <emscripten/emscripten.h>
 #include <emscripten/websocket.h>
@@ -17,7 +17,8 @@ namespace pong
         m_paddelModel = renderer.CreateModel("./dist/racket.dat");
         m_ballModel = renderer.CreateModel("./dist/ball.dat");
         m_debugPlane = renderer.CreateQuad({1.0f, 1.0f}, {1.0f, 0.0f, 0.0f});
-        m_connection.Initialize(0);
+        Connection &connection = Application::GetConnection();
+        connection.Initialize(0);
     }
 
     float Game::CalculateBallHeight(glm::vec2 position, glm::vec2 velocity)
@@ -48,7 +49,9 @@ namespace pong
         std::chrono::steady_clock::time_point currentTime = std::chrono::steady_clock::now();
         float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-        GameStateMessage *msg = m_connection.GetLatestMessage();
+        Connection &connection = Application::GetConnection();
+        GameStateMessage *msg = connection.GetLatestMessage();
+
         if (msg == nullptr)
         {
             return;
