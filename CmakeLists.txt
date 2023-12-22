@@ -4,6 +4,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 add_executable(pong 
 "src/main.cpp"
+"src/pong/InputDevice.cpp"
 "src/pong/Application.cpp"
 "src/pong/Renderer.cpp"
 "src/pong/Model.cpp"
@@ -29,7 +30,7 @@ if(EMSCRIPTEN)
   -sASYNCIFY
   -sFORCE_FILESYSTEM=1
   -lwebsocket.js
-  -O3
+  # -O3
   )
 else()
   set(DAWN_FETCH_DEPENDENCIES ON)
