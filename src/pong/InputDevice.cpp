@@ -19,11 +19,11 @@ namespace pong
 
                 Connection &connection = Application::GetConnection();
 
-                if (keyEvent->keyCode == 37)
+                if (keyEvent->keyCode == 38)
                 {
                     connection.SendPressedUp(true);
                 }
-                else if (keyEvent->keyCode == 39)
+                else if (keyEvent->keyCode == 40)
                 {
                     connection.SendPressedDown(true);
                 }

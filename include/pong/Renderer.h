@@ -27,9 +27,9 @@ namespace pong
         struct Uniforms
         {
             glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-            glm::mat4 view = glm::lookAt(glm::vec3(200.0f, 300.0f, -200.0f), // Camera position in World Space
-                                         glm::vec3(200.0f, 0.0, 150.0f),     // and looks at the origin
-                                         glm::vec3(0.0f, 1.0f, 0.0f));       // Head is up
+            glm::mat4 view = glm::lookAt(glm::vec3(200.0f, 300.0f, 200.0f), // Camera position in World Space
+                                         glm::vec3(200.0f, 0.0, 150.0f),    // and looks at the origin
+                                         glm::vec3(0.0f, 1.0f, 0.0f));      // Head is up
             glm::mat4 projection = glm::perspective(glm::radians(45.0f), float(c_width) / float(c_height), 0.1f, 10000.0f);
             glm::vec4 light = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
             float time;
@@ -50,6 +50,9 @@ namespace pong
         uint32_t m_width = c_width;
         uint32_t m_height = c_height;
 
+        // Buffers
+        wgpu::VertexBufferLayout m_vertexBufferLayout;
+
         // Device
         wgpu::Instance m_instance = {};
         wgpu::Device m_device = {};
@@ -58,6 +61,7 @@ namespace pong
 
         // Pipeline
         wgpu::RenderPipeline m_pipeline = {};
+        wgpu::RenderPipeline m_shadowPipeline = {};
 
         // Swap chain
         wgpu::SwapChain m_swapChain = {};
@@ -73,20 +77,28 @@ namespace pong
         wgpu::Texture m_depthTexture = {};
         wgpu::TextureView m_depthTextureView = {};
 
+        wgpu::Texture m_shadowDepthTexture = {};
+        wgpu::TextureView m_shadowDepthTextureView = {};
+        wgpu::Sampler m_shadowDepthSampler = {};
+
         // Uniforms
         wgpu::Buffer m_uniformBuffer = {};
-        Uniforms m_uniforms;
+        Uniforms m_uniforms = {};
 
         // Batches
         std::vector<RenderBatch> m_batches;
 
         bool InitializeSurface();
         bool InitializeSwapChain();
+        bool InitializeBindGroupLayout();
+        bool InitializeShadowPipeline();
         bool InitializePipeline();
         bool InitializeDepthTexture();
         bool InitializeGeometry();
         bool InitializeUniforms();
         bool InitializeBindGroup();
+
+        void RenderBatches(wgpu::RenderPassEncoder &pass);
 
     public:
         Renderer() {}

@@ -7,6 +7,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <map>
 #include <vector>
 
 namespace pong
@@ -55,6 +56,9 @@ namespace pong
     // Entity types
     struct EPlayer
     {
+        int32_t id = 0;
+        float targetAngle = 90.0f;
+        float currentAngle = 0.0f;
         CTransform transform;
     };
 
@@ -77,10 +81,10 @@ namespace pong
     class Game
     {
     private:
-        std::vector<EPlayer> m_players;
+        std::map<int32_t, EPlayer> m_players;
         EBall m_ball;
         ETable m_table = {{glm::vec3(c_arenaWidth / 2.0f, -79.0f, c_arenaHeight / 2.0f), glm::quat(glm::vec3(0.0f, glm::radians(90.0f), 0.0f))}};
-        ECamera m_camera = {{glm::lookAt(glm::vec3(c_arenaWidth / 2.0f, 250.0f, -c_arenaHeight / 2.0f),
+        ECamera m_camera = {{glm::lookAt(glm::vec3(c_arenaWidth / 2.0f, 250.0f, 2 * c_arenaHeight / 2.0f),
                                          glm::vec3(c_arenaWidth / 2.0f, 0.0f, c_arenaHeight / 2.0f),
                                          glm::vec3(0.0f, 1.0f, 0.0f))}};
 

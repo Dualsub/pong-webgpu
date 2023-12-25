@@ -16,7 +16,7 @@ namespace pong
         m_tableModel = renderer.CreateModel("./dist/table.dat");
         m_paddelModel = renderer.CreateModel("./dist/racket.dat");
         m_ballModel = renderer.CreateModel("./dist/ball.dat");
-        m_debugPlane = renderer.CreateQuad({1.0f, 1.0f}, {1.0f, 0.0f, 0.0f});
+        m_debugPlane = renderer.CreateQuad({1.0f, 1.0f}, {0.0f, 0.0f, 0.0f});
         Connection &connection = Application::GetConnection();
         connection.Initialize(0);
     }
@@ -60,38 +60,57 @@ namespace pong
         // Update ball
         float ballHeight = CalculateBallHeight(msg->ball.position * c_scaleFactor, msg->ball.velocity * c_scaleFactor);
         m_ball.transform.position = glm::vec3(msg->ball.position.x * c_scaleFactor.x, ballHeight, msg->ball.position.y * c_scaleFactor.y);
-        for (uint32_t i = 0; i < msg->players.size(); i++)
+
+        for (auto &&msgPlayer : msg->players)
         {
-            if (m_players.size() <= i)
+            if (!m_players.contains(msgPlayer.playerId))
             {
-                m_players.push_back({});
+                m_players[msgPlayer.playerId] = {};
             }
 
-            m_players[i].transform.position = glm::vec3(msg->players[i].position.x * c_scaleFactor.x, c_padelTableHitOffset, msg->players[i].position.y * c_scaleFactor.y);
+            EPlayer &player = m_players[msgPlayer.playerId];
+
+            glm::vec3 newPlayerPos = glm::vec3(msgPlayer.position.x * c_scaleFactor.x, c_padelTableHitOffset, msgPlayer.position.y * c_scaleFactor.y);
+
+            if (glm::abs(newPlayerPos.z - player.transform.position.z) > glm::epsilon<float>())
+            {
+                bool isOrientedUp = newPlayerPos.z > player.transform.position.z;
+                float targetAngle = isOrientedUp ? -75.0f : 75.0f;
+                player.targetAngle = targetAngle;
+            }
+
+            player.currentAngle += (player.targetAngle - player.currentAngle) * 5.0f * deltaTime;
+            player.transform.position = newPlayerPos;
         }
     }
 
     void Game::Render(Renderer &renderer)
     {
-        static glm::mat4 renderTransformOffset = glm::translate(glm::mat4(1.0f), glm::vec3(c_padelWidth / 2.0f, 0.0f, c_padelHeight / 2.0f)) * glm::mat4_cast(glm::quat(glm::vec3(0.0f, glm::radians(90.0f), glm::radians(90.0f))));
+        static glm::mat4 paddelRenderTransformOffset = glm::translate(glm::mat4(1.0f), glm::vec3(-c_padelWidth / 2.0f, 0.0f, c_padelHeight / 2.0f));
+        static glm::mat4 ballRenderTransformOffset = glm::translate(glm::mat4(1.0f), glm::vec3(-c_ballRadius, 0.0f, -c_ballRadius)) * glm::scale(glm::mat4(1.0f), glm::vec3(1.3f));
         renderer.SetCameraView(m_camera.transform.GetMatrix());
 
         std::vector<glm::mat4> playerTransforms = std::vector<glm::mat4>(m_players.size());
-        for (uint32_t i = 0; i < playerTransforms.size(); i++)
+        uint32_t i = 0;
+        for (const auto &[id, player] : m_players)
         {
-            playerTransforms[i] = m_players[i].transform.GetMatrix() * renderTransformOffset;
+            float angle = player.currentAngle;
+            playerTransforms[i] = player.transform.GetMatrix() * paddelRenderTransformOffset * glm::mat4_cast(glm::quat(glm::vec3(0.0f, glm::radians(angle), glm::radians(90.0f))));
+            i++;
         }
 
         renderer.SubmitInstances(m_paddelModel.get(), playerTransforms);
-        renderer.SubmitInstances(m_ballModel.get(), {m_ball.transform.GetMatrix()});
-
         renderer.SubmitInstances(m_tableModel.get(), {m_table.transform.GetMatrix()});
+        renderer.SubmitInstances(m_ballModel.get(), {m_ball.transform.GetMatrix() * ballRenderTransformOffset});
 
         // // For debugging, translate and scale
+        glm::vec3 ballPos = m_ball.transform.position;
+        ballPos.y = 0.0f;
         // glm::mat4 planeTransform = glm::translate(glm::mat4(1.0f), glm::vec3(c_arenaWidth / 2.0f, 0.0f, c_arenaHeight / 2.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(c_arenaWidth, 1.0f, c_arenaHeight));
-        // glm::mat4 paddleTransform1 = glm::translate(glm::mat4(1.0f), m_players[0].transform.position - glm::vec3(-c_padelWidth / 2.0f, 0.0f, -c_padelHeight / 2.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(c_padelWidth, 1.0f, c_padelHeight));
-        // glm::mat4 paddleTransform2 = glm::translate(glm::mat4(1.0f), m_players[1].transform.position - glm::vec3(-c_padelWidth / 2.0f, 0.0f, -c_padelHeight / 2.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(c_padelWidth, 1.0f, c_padelHeight));
-        // renderer.SubmitInstances(m_debugPlane.get(), {planeTransform});
+        // glm::mat4 paddleTransform1 = glm::translate(glm::mat4(1.0f), m_players[0].transform.position - glm::vec3(c_padelWidth / 2.0f, 0.0f, -c_padelHeight / 2.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(c_padelWidth, 1.0f, c_padelHeight));
+        // glm::mat4 paddleTransform2 = glm::translate(glm::mat4(1.0f), m_players[1].transform.position - glm::vec3(c_padelWidth / 2.0f, 0.0f, -c_padelHeight / 2.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(c_padelWidth, 1.0f, c_padelHeight));
+        glm::mat4 ballTransform = glm::translate(glm::mat4(1.0f), ballPos - glm::vec3(c_ballRadius, 0.0f, c_ballRadius)) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f * c_ballRadius, 1.0f, 2.0f * c_ballRadius));
+        renderer.SubmitInstances(m_debugPlane.get(), {ballTransform});
     }
 
     void Game::Terminate()

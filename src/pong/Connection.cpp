@@ -122,9 +122,6 @@ namespace pong
         auto now = std::chrono::steady_clock::now();
         message.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
 
-        std::cout << "SendInput: "
-                  << "upPressed: " << message.upPressed << ", downPressed: " << message.downPressed << std::endl;
-
         emscripten_websocket_send_binary(m_socket, &message, sizeof(InputMessage));
     }
 }

@@ -21,7 +21,7 @@ target_link_libraries(pong PRIVATE glm)
 if(EMSCRIPTEN)
 # Pinrt current source directory
 # message(STATUS "Current source directory: ${CMAKE_CURRENT_SOURCE_DIR}/res/dist")
-  set_target_properties(pong PROPERTIES SUFFIX ".html")
+  # set_target_properties(pong PROPERTIES SUFFIX ".html")
   # Add Emscripten-specific link options
   target_link_options(pong PRIVATE
   --embed-file ${CMAKE_CURRENT_SOURCE_DIR}/res/dist@/dist
