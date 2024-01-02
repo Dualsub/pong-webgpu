@@ -74,8 +74,9 @@ namespace pong
 
             if (glm::abs(newPlayerPos.z - player.transform.position.z) > glm::epsilon<float>())
             {
+                float targetAngle = 0.0f;
                 bool isOrientedUp = newPlayerPos.z > player.transform.position.z;
-                float targetAngle = isOrientedUp ? -75.0f : 75.0f;
+                targetAngle = isOrientedUp ? -75.0f : 75.0f;
                 player.targetAngle = targetAngle;
             }
 
@@ -104,13 +105,12 @@ namespace pong
         renderer.SubmitInstances(m_ballModel.get(), {m_ball.transform.GetMatrix() * ballRenderTransformOffset});
 
         // // For debugging, translate and scale
-        glm::vec3 ballPos = m_ball.transform.position;
-        ballPos.y = 0.0f;
-        // glm::mat4 planeTransform = glm::translate(glm::mat4(1.0f), glm::vec3(c_arenaWidth / 2.0f, 0.0f, c_arenaHeight / 2.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(c_arenaWidth, 1.0f, c_arenaHeight));
+        // glm::vec3 ballPos = m_ball.transform.position;
+        // ballPos.y = 0.0f;
         // glm::mat4 paddleTransform1 = glm::translate(glm::mat4(1.0f), m_players[0].transform.position - glm::vec3(c_padelWidth / 2.0f, 0.0f, -c_padelHeight / 2.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(c_padelWidth, 1.0f, c_padelHeight));
         // glm::mat4 paddleTransform2 = glm::translate(glm::mat4(1.0f), m_players[1].transform.position - glm::vec3(c_padelWidth / 2.0f, 0.0f, -c_padelHeight / 2.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(c_padelWidth, 1.0f, c_padelHeight));
-        glm::mat4 ballTransform = glm::translate(glm::mat4(1.0f), ballPos - glm::vec3(c_ballRadius, 0.0f, c_ballRadius)) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f * c_ballRadius, 1.0f, 2.0f * c_ballRadius));
-        renderer.SubmitInstances(m_debugPlane.get(), {ballTransform});
+        // glm::mat4 ballTransform = glm::translate(glm::mat4(1.0f), ballPos - glm::vec3(c_ballRadius, 0.0f, c_ballRadius)) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f * c_ballRadius, 1.0f, 2.0f * c_ballRadius));
+        // renderer.SubmitInstances(m_debugPlane.get(), {ballTransform});
     }
 
     void Game::Terminate()

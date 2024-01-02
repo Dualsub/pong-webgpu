@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Pong</title>
+    <meta charset="utf-8" />
+    <style>
+        body {
+            background-color: #000000;
+            display: flex;
+            justify-content: center;
+            width: 100%;
+        }
+    </style>
+    <!-- Favoicon as ping pong emoji svg -->
+    <link rel="icon"
+        href="data:;base64,PHN2ZyB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PHBhdGggZD0iTTEwMCwwQzEwMCwwLjUgMTAwLDAgMTAwLDEwMEMxMDAsMTAuNSAxMDAsMC41IDEwMCwwQzEwMCwwLjUgMTAwLDAgMTAwLDEwMEwxMDAsMTAwQzEwMCwxMDAgMTAwLDEwMCAxMDAsMTAwWiIgZmlsbD0iIzAwMDAwMCIvPjwvc3ZnPg==" />
+</head>
+
+<body id="body">
+    <canvas id="canvas"></canvas>
+    <script src="pong.js" type="text/javascript"></script>
+    <script>
+        const canvas = document.getElementById("canvas");
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    </script>
+</body>
+
+</html>

@@ -30,7 +30,12 @@ namespace pong
             glm::mat4 view = glm::lookAt(glm::vec3(200.0f, 300.0f, 200.0f), // Camera position in World Space
                                          glm::vec3(200.0f, 0.0, 150.0f),    // and looks at the origin
                                          glm::vec3(0.0f, 1.0f, 0.0f));      // Head is up
-            glm::mat4 projection = glm::perspective(glm::radians(45.0f), float(c_width) / float(c_height), 0.1f, 10000.0f);
+            glm::mat4 projection = glm::perspective(glm::radians(45.0f), float(c_width) / float(c_height), 0.1f, 1000.0f);
+            glm::mat4 lightViewProjection =
+                glm::ortho(-c_shadowMapWorldSize.x / 2.0f, c_shadowMapWorldSize.x / 2.0f, -c_shadowMapWorldSize.y / 2.0f, c_shadowMapWorldSize.y / 2.0f, 1.0f, 1000.0f) *
+                glm::lookAt(glm::vec3(100.0f, 900.0f, 75.01f), // Camera position in World Space
+                            glm::vec3(100.0f, 0.0f, 75.0f),    // and looks at the origin
+                            glm::vec3(0.0f, 1.0f, 0.0f));
             glm::vec4 light = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
             float time;
             float _padding[3];
@@ -41,9 +46,12 @@ namespace pong
         // Constants
         const wgpu::TextureFormat c_swapChainFormat = wgpu::TextureFormat::BGRA8Unorm;
         const wgpu::TextureFormat c_depthFormat = wgpu::TextureFormat::Depth24Plus;
-        const size_t c_minUniformBufferOffsetAlignment = 64;
-        const static uint32_t c_width = 1060;
-        const static uint32_t c_height = 600;
+        const wgpu::TextureFormat c_shadowMapDepthFormat = wgpu::TextureFormat::Depth32Float;
+        const size_t c_minUniformBufferOffsetAlignment = 256;
+        const static uint32_t c_width = 1280;
+        const static uint32_t c_height = 720;
+        constexpr static glm::vec2 c_shadowMapWorldSize = glm::vec2(400.0f, 200.0f);
+        const static uint32_t c_shadowMapSize = 1024;
         const std::string c_canvasSelector = "#canvas";
 
         // Window
@@ -60,7 +68,7 @@ namespace pong
         wgpu::Queue m_queue = {};
 
         // Pipeline
-        wgpu::RenderPipeline m_pipeline = {};
+        wgpu::RenderPipeline m_renderPipeline = {};
         wgpu::RenderPipeline m_shadowPipeline = {};
 
         // Swap chain
@@ -70,8 +78,9 @@ namespace pong
         wgpu::ShaderModule m_shaderModule = {};
 
         // Bind group
-        wgpu::BindGroupLayout m_bindGroupLayout = {};
+        std::array<wgpu::BindGroupLayout, 2> m_bindGroupLayouts = {};
         wgpu::BindGroup m_bindGroup = {};
+        wgpu::BindGroup m_shadowBindGroup = {};
 
         // Depth texture
         wgpu::Texture m_depthTexture = {};
@@ -83,7 +92,7 @@ namespace pong
 
         // Uniforms
         wgpu::Buffer m_uniformBuffer = {};
-        Uniforms m_uniforms = {};
+        Uniforms m_uniforms;
 
         // Batches
         std::vector<RenderBatch> m_batches;
@@ -92,8 +101,9 @@ namespace pong
         bool InitializeSwapChain();
         bool InitializeBindGroupLayout();
         bool InitializeShadowPipeline();
-        bool InitializePipeline();
+        bool InitializeRenderPipeline();
         bool InitializeDepthTexture();
+        bool InitializeShadowMapTexture();
         bool InitializeGeometry();
         bool InitializeUniforms();
         bool InitializeBindGroup();

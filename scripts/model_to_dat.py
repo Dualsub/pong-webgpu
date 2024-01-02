@@ -38,7 +38,7 @@ def main():
     output_path = args.output
 
     print('Loading model...')
-    flags = postprocess.aiProcess_Triangulate | postprocess.aiProcess_JoinIdenticalVertices | postprocess.aiProcess_GenSmoothNormals | postprocess.aiProcess_CalcTangentSpace | postprocess.aiProcess_PreTransformVertices | postprocess.aiProcess_FlipUVs | postprocess.aiProcess_FlipWindingOrder
+    flags = postprocess.aiProcess_Triangulate | postprocess.aiProcess_JoinIdenticalVertices | postprocess.aiProcess_GenSmoothNormals | postprocess.aiProcess_CalcTangentSpace | postprocess.aiProcess_PreTransformVertices | postprocess.aiProcess_FlipUVs
 
     with load(model_path, processing=flags) as scene:
         indices = []

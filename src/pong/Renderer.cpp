@@ -23,23 +23,34 @@ namespace pong
         @builtin(position) position: vec4f,
         @location(0) color: vec3f,
         @location(1) normal: vec3f,
+        @location(2) fragPosLightSpace: vec3f,
     };
 
     struct Uniforms {
         model: mat4x4<f32>,
         view: mat4x4<f32>,
         projection: mat4x4<f32>,
+        lightViewProjection: mat4x4<f32>,
         light: vec3<f32>,
         time: f32,
     };
 
     @group(0) @binding(0) var<uniform> uUniforms: Uniforms;
+    @group(1) @binding(0) var shadowMap: texture_depth_2d;
+    @group(1) @binding(1) var shadowSampler: sampler_comparison;
 
     @vertex
     fn vs_main(in: VertexInput) -> VertexOutput {
         var out: VertexOutput;
         var position = vec4f(in.position, 1.0);
         out.position = uUniforms.projection * uUniforms.view * uUniforms.model * position;
+
+        let posFromLight = uUniforms.lightViewProjection * uUniforms.model * position;
+        out.fragPosLightSpace = vec3f(
+            posFromLight.xy * vec2f(0.5, -0.5) + vec2f(0.5),
+            posFromLight.z
+        );
+
         out.color = in.color;
         out.normal = in.normal;
         return out;
@@ -47,15 +58,47 @@ namespace pong
 
     @fragment
     fn fs_main(in: VertexOutput) -> @location(0) vec4f {
+        let ambient = 0.2;
+        var visibility = 0.0;
+        for (var y = -1; y <= 1; y++) {
+            for (var x = -1; x <= 1; x++) {
+                let offset = vec2<f32>(vec2(x, y)) * 1.0 / 1024.0;
+                visibility += textureSampleCompare(
+                    shadowMap, shadowSampler,
+                    in.fragPosLightSpace.xy + offset, in.fragPosLightSpace.z - 0.007
+                );
+            }
+        }
+        visibility /= 9.0;
+
+
         // let linear_color = pow(in.color, vec3f(2.2));
-        // return vec4f(linear_color, 1.0);
-        let light = dot(normalize(in.normal), normalize(vec3f(-uUniforms.light))) * 0.5 + 0.5;
-        return vec4f(in.color * light, 1.0);
+        let light = (dot(normalize(in.normal), normalize(vec3f(-uUniforms.light))) * 0.5 + 0.5) * visibility;
+        return vec4f(in.color * light * (1.0 - ambient) + in.color * ambient, 1.0);
     }
 
     )";
 
-    const char *shadowShaderSource = shaderSource;
+    const char *shadowShaderSource = R"(
+ 
+    struct Uniforms {
+        model: mat4x4<f32>,
+        view: mat4x4<f32>,
+        projection: mat4x4<f32>,
+        lightViewProjection: mat4x4<f32>,
+        light: vec3<f32>,
+        time: f32,
+    };
+
+    @group(0) @binding(0) var<uniform> uUniforms: Uniforms;
+        
+    @vertex
+    fn vs_main(@location(0) position: vec3<f32>) -> @builtin(position) vec4<f32> {
+        // Output triangle position in clip space
+        return uUniforms.lightViewProjection * uUniforms.model * vec4(position, 1.0);
+    }
+
+    )";
 
     // Helper function to round up to the next multiple of a number.
     uint32_t CeilToNextMultiple(uint32_t value, uint32_t step)
@@ -88,13 +131,13 @@ namespace pong
             return false;
         }
 
-        // if (!InitializeShadowPipeline())
-        // {
-        //     std::cerr << "Cannot initialize WebGPU shadow pipeline" << std::endl;
-        //     return false;
-        // }
+        if (!InitializeShadowPipeline())
+        {
+            std::cerr << "Cannot initialize WebGPU shadow pipeline" << std::endl;
+            return false;
+        }
 
-        if (!InitializePipeline())
+        if (!InitializeRenderPipeline())
         {
             std::cerr << "Cannot initialize WebGPU pipeline" << std::endl;
             return false;
@@ -103,6 +146,12 @@ namespace pong
         if (!InitializeDepthTexture())
         {
             std::cerr << "Cannot initialize WebGPU depth texture" << std::endl;
+            return false;
+        }
+
+        if (!InitializeShadowMapTexture())
+        {
+            std::cerr << "Cannot initialize WebGPU shadow map texture" << std::endl;
             return false;
         }
 
@@ -137,7 +186,7 @@ namespace pong
         surfaceDesc.nextInChain = &canvasDesc;
         m_surface = m_instance.CreateSurface(&surfaceDesc);
 
-        return true;
+        return m_surface != nullptr;
     }
 
     bool Renderer::InitializeSwapChain()
@@ -168,9 +217,25 @@ namespace pong
         wgpu::BindGroupLayoutDescriptor bindGroupLayoutDesc{};
         bindGroupLayoutDesc.entryCount = 1;
         bindGroupLayoutDesc.entries = &bindingLayout;
-        m_bindGroupLayout = m_device.CreateBindGroupLayout(&bindGroupLayoutDesc);
+        m_bindGroupLayouts[0] = m_device.CreateBindGroupLayout(&bindGroupLayoutDesc);
 
-        return m_bindGroupLayout != nullptr;
+        // Shadow binding layout.
+        std::array<wgpu::BindGroupLayoutEntry, 2> bindingLayouts = {};
+        bindingLayouts[0].binding = 0;
+        bindingLayouts[0].visibility = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
+        bindingLayouts[0].texture.sampleType = wgpu::TextureSampleType::Depth;
+        bindingLayouts[0].texture.viewDimension = wgpu::TextureViewDimension::e2D;
+
+        bindingLayouts[1].binding = 1;
+        bindingLayouts[1].visibility = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
+        bindingLayouts[1].sampler.type = wgpu::SamplerBindingType::Comparison;
+
+        bindGroupLayoutDesc.entryCount = bindingLayouts.size();
+        bindGroupLayoutDesc.entries = bindingLayouts.data();
+
+        m_bindGroupLayouts[1] = m_device.CreateBindGroupLayout(&bindGroupLayoutDesc);
+
+        return m_bindGroupLayouts[0] != nullptr && m_bindGroupLayouts[1] != nullptr;
     }
 
     bool Renderer::InitializeShadowPipeline()
@@ -227,40 +292,56 @@ namespace pong
         pipelineDesc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
         pipelineDesc.primitive.stripIndexFormat = wgpu::IndexFormat::Undefined;
         pipelineDesc.primitive.frontFace = wgpu::FrontFace::CCW;
-        pipelineDesc.primitive.cullMode = wgpu::CullMode::Back;
+        pipelineDesc.primitive.cullMode = wgpu::CullMode::Front;
 
-        // Fragment and blend state.
-        wgpu::FragmentState fragmentState;
-        fragmentState.module = m_shaderModule;
-        fragmentState.entryPoint = "fs_main";
-        fragmentState.constantCount = 0;
-        fragmentState.constants = nullptr;
+        // // Fragment and blend state.
+        // wgpu::FragmentState fragmentState;
+        // fragmentState.module = m_shaderModule;
+        // fragmentState.entryPoint = "fs_main";
+        // fragmentState.constantCount = 0;
+        // fragmentState.constants = nullptr;
 
-        wgpu::BlendState blendState;
-        blendState.color.srcFactor = wgpu::BlendFactor::SrcAlpha;
-        blendState.color.dstFactor = wgpu::BlendFactor::OneMinusSrcAlpha;
-        blendState.color.operation = wgpu::BlendOperation::Add;
+        // wgpu::BlendState blendState;
+        // blendState.color.srcFactor = wgpu::BlendFactor::SrcAlpha;
+        // blendState.color.dstFactor = wgpu::BlendFactor::OneMinusSrcAlpha;
+        // blendState.color.operation = wgpu::BlendOperation::Add;
 
-        wgpu::ColorTargetState colorTarget;
-        colorTarget.format = wgpu::TextureFormat::Depth32Float;
-        colorTarget.blend = &blendState;
-        colorTarget.writeMask = wgpu::ColorWriteMask::All;
+        // wgpu::ColorTargetState colorTarget;
+        // colorTarget.format = wgpu::TextureFormat::Depth32Float;
+        // colorTarget.blend = &blendState;
+        // colorTarget.writeMask = wgpu::ColorWriteMask::All;
 
-        fragmentState.targetCount = 1;
-        fragmentState.targets = &colorTarget;
+        // fragmentState.targetCount = 1;
+        // fragmentState.targets = &colorTarget;
 
-        pipelineDesc.fragment = &fragmentState;
+        // pipelineDesc.fragment = &fragmentState;
 
         // Depth testing.
         wgpu::DepthStencilState depthStencilState = {};
         depthStencilState.depthCompare = wgpu::CompareFunction::Less;
         depthStencilState.depthWriteEnabled = true;
-        depthStencilState.format = c_depthFormat;
+        depthStencilState.format = c_shadowMapDepthFormat;
+
+        // Deactivate the stencil alltogether
+        depthStencilState.stencilReadMask = 0;
+        depthStencilState.stencilWriteMask = 0;
+
+        pipelineDesc.depthStencil = &depthStencilState;
+
+        // Create the pipeline layout
+        wgpu::PipelineLayoutDescriptor layoutDesc{};
+        layoutDesc.bindGroupLayoutCount = 1;
+        layoutDesc.bindGroupLayouts = m_bindGroupLayouts.data();
+        wgpu::PipelineLayout layout = m_device.CreatePipelineLayout(&layoutDesc);
+        pipelineDesc.layout = layout;
+
+        // Create the pipeline.
+        m_shadowPipeline = m_device.CreateRenderPipeline(&pipelineDesc);
 
         return m_shadowPipeline != nullptr;
     }
 
-    bool Renderer::InitializePipeline()
+    bool Renderer::InitializeRenderPipeline()
     {
         std::cout << "Initializing WebGPU pipeline" << std::endl;
         wgpu::RenderPipelineDescriptor pipelineDesc = {};
@@ -357,15 +438,15 @@ namespace pong
 
         // Create the pipeline layout
         wgpu::PipelineLayoutDescriptor layoutDesc{};
-        layoutDesc.bindGroupLayoutCount = 1;
-        layoutDesc.bindGroupLayouts = &m_bindGroupLayout;
+        layoutDesc.bindGroupLayoutCount = m_bindGroupLayouts.size();
+        layoutDesc.bindGroupLayouts = m_bindGroupLayouts.data();
         wgpu::PipelineLayout layout = m_device.CreatePipelineLayout(&layoutDesc);
         pipelineDesc.layout = layout;
 
         // Create the pipeline.
-        m_pipeline = m_device.CreateRenderPipeline(&pipelineDesc);
+        m_renderPipeline = m_device.CreateRenderPipeline(&pipelineDesc);
 
-        return m_pipeline != nullptr;
+        return m_renderPipeline != nullptr;
     }
 
     bool Renderer::InitializeDepthTexture()
@@ -400,6 +481,42 @@ namespace pong
         return m_depthTexture != nullptr;
     }
 
+    bool Renderer::InitializeShadowMapTexture()
+    {
+        wgpu::TextureDescriptor textureDesc{};
+        textureDesc.label = "Shadow Map Texture";
+        textureDesc.dimension = wgpu::TextureDimension::e2D;
+        textureDesc.format = c_shadowMapDepthFormat;
+        textureDesc.mipLevelCount = 1;
+        textureDesc.sampleCount = 1;
+        textureDesc.size.width = c_shadowMapSize;
+        textureDesc.size.height = c_shadowMapSize;
+        textureDesc.size.depthOrArrayLayers = 1;
+        textureDesc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopySrc;
+        textureDesc.viewFormatCount = 1;
+        textureDesc.viewFormats = &c_shadowMapDepthFormat;
+
+        m_shadowDepthTexture = m_device.CreateTexture(&textureDesc);
+
+        wgpu::TextureViewDescriptor textureViewDesc{};
+        textureViewDesc.label = "Shadow Map Texture View";
+        textureViewDesc.dimension = wgpu::TextureViewDimension::e2D;
+        textureViewDesc.format = c_shadowMapDepthFormat;
+        textureViewDesc.baseMipLevel = 0;
+        textureViewDesc.mipLevelCount = 1;
+        textureViewDesc.baseArrayLayer = 0;
+        textureViewDesc.arrayLayerCount = 1;
+        textureViewDesc.aspect = wgpu::TextureAspect::DepthOnly;
+
+        m_shadowDepthTextureView = m_shadowDepthTexture.CreateView(&textureViewDesc);
+
+        wgpu::SamplerDescriptor samplerDesc = {};
+        samplerDesc.compare = wgpu::CompareFunction::Less;
+        m_shadowDepthSampler = m_device.CreateSampler(&samplerDesc);
+
+        return m_depthTexture != nullptr && m_shadowDepthTextureView != nullptr && m_shadowDepthSampler != nullptr;
+    }
+
     bool Renderer::InitializeGeometry()
     {
         // std::cout << "Initializing WebGPU geometry" << std::endl;
@@ -425,21 +542,31 @@ namespace pong
     bool Renderer::InitializeBindGroup()
     {
         // Create a binding
-        std::array<wgpu::BindGroupEntry, 1> bindings{};
-
-        auto &binding = bindings[0];
-        binding.binding = 0;
-        binding.buffer = m_uniformBuffer;
-        binding.size = sizeof(Uniforms);
+        wgpu::BindGroupEntry uniformBinding = {};
+        uniformBinding.binding = 0;
+        uniformBinding.buffer = m_uniformBuffer;
+        uniformBinding.size = sizeof(Uniforms);
 
         // A bind group contains one or multiple bindings
         wgpu::BindGroupDescriptor bindGroupDesc{};
-        bindGroupDesc.layout = m_bindGroupLayout;
-        bindGroupDesc.entryCount = bindings.size();
-        bindGroupDesc.entries = bindings.data();
+        bindGroupDesc.layout = m_bindGroupLayouts[0];
+        bindGroupDesc.entryCount = 1;
+        bindGroupDesc.entries = &uniformBinding;
         m_bindGroup = m_device.CreateBindGroup(&bindGroupDesc);
 
-        return m_bindGroup != nullptr;
+        std::array<wgpu::BindGroupEntry, 2> shadowMapBindings{};
+        shadowMapBindings[0].binding = 0;
+        shadowMapBindings[0].textureView = m_shadowDepthTextureView;
+
+        shadowMapBindings[1].binding = 1;
+        shadowMapBindings[1].sampler = m_shadowDepthSampler;
+
+        bindGroupDesc.layout = m_bindGroupLayouts[1];
+        bindGroupDesc.entryCount = shadowMapBindings.size();
+        bindGroupDesc.entries = shadowMapBindings.data();
+        m_shadowBindGroup = m_device.CreateBindGroup(&bindGroupDesc);
+
+        return m_bindGroup != nullptr && m_shadowBindGroup != nullptr;
     }
 
     void Renderer::RenderBatches(wgpu::RenderPassEncoder &pass)
@@ -500,33 +627,36 @@ namespace pong
 
         wgpu::CommandEncoder encoder = m_device.CreateCommandEncoder();
 
-        // { // Shadow pass
-        //     wgpu::RenderPassDescriptor renderPassDesc;
+        { // Shadow pass
+            wgpu::RenderPassDescriptor shadowPassDesc;
 
-        //     wgpu::RenderPassDepthStencilAttachment renderPassDepthStencilAttachment;
-        //     renderPassDepthStencilAttachment.view = m_shadowDepthTextureView;
-        //     renderPassDepthStencilAttachment.depthLoadOp = wgpu::LoadOp::Clear;
-        //     renderPassDepthStencilAttachment.depthStoreOp = wgpu::StoreOp::Store;
-        //     renderPassDepthStencilAttachment.depthClearValue = 1.0f;
-        //     renderPassDepthStencilAttachment.depthReadOnly = false;
+            shadowPassDesc.colorAttachmentCount = 0;
+            shadowPassDesc.colorAttachments = nullptr;
 
-        //     // Stencil is not used
-        //     renderPassDepthStencilAttachment.stencilStoreOp = wgpu::StoreOp::Undefined;
-        //     renderPassDepthStencilAttachment.stencilLoadOp = wgpu::LoadOp::Undefined;
-        //     renderPassDepthStencilAttachment.stencilClearValue = 0;
-        //     renderPassDepthStencilAttachment.stencilReadOnly = true;
+            wgpu::RenderPassDepthStencilAttachment renderPassDepthStencilAttachment;
+            renderPassDepthStencilAttachment.view = m_shadowDepthTextureView;
+            renderPassDepthStencilAttachment.depthLoadOp = wgpu::LoadOp::Clear;
+            renderPassDepthStencilAttachment.depthStoreOp = wgpu::StoreOp::Store;
+            renderPassDepthStencilAttachment.depthClearValue = 1.0f;
+            renderPassDepthStencilAttachment.depthReadOnly = false;
 
-        //     renderPassDesc.depthStencilAttachment = &renderPassDepthStencilAttachment;
+            // Stencil is not used
+            renderPassDepthStencilAttachment.stencilStoreOp = wgpu::StoreOp::Undefined;
+            renderPassDepthStencilAttachment.stencilLoadOp = wgpu::LoadOp::Undefined;
+            renderPassDepthStencilAttachment.stencilClearValue = 0;
+            renderPassDepthStencilAttachment.stencilReadOnly = true;
 
-        //     renderPassDesc.timestampWrites = nullptr;
-        //     wgpu::RenderPassEncoder renderPass = encoder.BeginRenderPass(&renderPassDesc);
+            shadowPassDesc.depthStencilAttachment = &renderPassDepthStencilAttachment;
 
-        //     renderPass.SetPipeline(m_shadowPipeline);
+            shadowPassDesc.timestampWrites = nullptr;
+            wgpu::RenderPassEncoder shadowPass = encoder.BeginRenderPass(&shadowPassDesc);
 
-        //     RenderBatches(renderPass);
+            shadowPass.SetPipeline(m_shadowPipeline);
 
-        //     renderPass.End();
-        // }
+            RenderBatches(shadowPass);
+
+            shadowPass.End();
+        }
 
         { // Render pass
 
@@ -558,10 +688,9 @@ namespace pong
             renderPassDesc.timestampWrites = nullptr;
             wgpu::RenderPassEncoder renderPass = encoder.BeginRenderPass(&renderPassDesc);
 
-            renderPass.SetPipeline(m_pipeline);
-
+            renderPass.SetPipeline(m_renderPipeline);
+            renderPass.SetBindGroup(1, m_shadowBindGroup);
             RenderBatches(renderPass);
-
             renderPass.End();
         }
 
