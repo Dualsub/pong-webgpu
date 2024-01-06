@@ -37,6 +37,12 @@ namespace pong
             return;
         }
 
+        if (!m_audioPlayer.Initialize())
+        {
+            std::cerr << "Failed to initialize audio player" << std::endl;
+            return;
+        }
+
         Initialize();
 
 #if defined(__EMSCRIPTEN__)
@@ -75,6 +81,8 @@ namespace pong
 
     void Application::Terminate()
     {
+        m_audioPlayer.Terminate();
+        m_renderer.Terminate();
     }
 
 }

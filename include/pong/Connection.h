@@ -31,6 +31,7 @@ namespace pong
     struct Events
     {
         bool hasHit = false;
+        bool playerWasHit = false;
         bool hasSmashed = false;
         bool newRound = false;
     };

@@ -4,11 +4,13 @@ set(CMAKE_CXX_STANDARD 20)
 
 add_executable(pong 
 "src/main.cpp"
-"src/pong/InputDevice.cpp"
 "src/pong/Application.cpp"
+"src/pong/Device.cpp"
+"src/pong/AudioPlayer.cpp"
+"src/pong/Sound.cpp"
+"src/pong/InputDevice.cpp"
 "src/pong/Renderer.cpp"
 "src/pong/Model.cpp"
-"src/pong/Device.cpp"
 "src/pong/Connection.cpp"
 "src/pong/Game.cpp"
 )
@@ -18,7 +20,7 @@ target_include_directories(pong PRIVATE "include")
 add_subdirectory("third_party/glm" EXCLUDE_FROM_ALL)
 target_link_libraries(pong PRIVATE glm)
 
-if(EMSCRIPTEN)
+# if(EMSCRIPTEN)
 # Pinrt current source directory
 # message(STATUS "Current source directory: ${CMAKE_CURRENT_SOURCE_DIR}/res/dist")
   # set_target_properties(pong PROPERTIES SUFFIX ".html")
@@ -30,10 +32,11 @@ if(EMSCRIPTEN)
   -sASYNCIFY
   -sFORCE_FILESYSTEM=1
   -lwebsocket.js
-  # -O3
+  -lopenal
+  -O3
   )
-else()
-  set(DAWN_FETCH_DEPENDENCIES ON)
-  add_subdirectory("third_party/dawn" EXCLUDE_FROM_ALL)
-  target_link_libraries(pong PRIVATE webgpu_cpp webgpu_dawn webgpu_glfw)
-endif()
+# else()
+#   set(DAWN_FETCH_DEPENDENCIES ON)
+#   add_subdirectory("third_party/dawn" EXCLUDE_FROM_ALL)
+#   target_link_libraries(pong PRIVATE webgpu_cpp webgpu_dawn webgpu_glfw)
+# endif()

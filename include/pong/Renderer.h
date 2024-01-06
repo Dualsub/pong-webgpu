@@ -36,7 +36,8 @@ namespace pong
                 glm::lookAt(glm::vec3(100.0f, 900.0f, 75.01f), // Camera position in World Space
                             glm::vec3(100.0f, 0.0f, 75.0f),    // and looks at the origin
                             glm::vec3(0.0f, 1.0f, 0.0f));
-            glm::vec4 light = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+            glm::vec4 lightDirection = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+            glm::vec4 camera = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
             float time;
             float _padding[3];
         };
@@ -51,7 +52,7 @@ namespace pong
         const static uint32_t c_width = 1280;
         const static uint32_t c_height = 720;
         constexpr static glm::vec2 c_shadowMapWorldSize = glm::vec2(400.0f, 200.0f);
-        const static uint32_t c_shadowMapSize = 1024;
+        const static uint32_t c_shadowMapSize = 2048;
         const std::string c_canvasSelector = "#canvas";
 
         // Window
@@ -128,6 +129,7 @@ namespace pong
         void SetCameraView(const glm::mat4 &view)
         {
             m_uniforms.view = view;
+            m_uniforms.camera = glm::vec4(glm::vec3(view[3]), 0.0f);
         }
 
         void Render();

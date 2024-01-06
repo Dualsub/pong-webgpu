@@ -2,6 +2,7 @@
 
 #include "pong/Connection.h"
 #include "pong/Model.h"
+#include "pong/Sound.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -9,6 +10,8 @@
 
 #include <map>
 #include <vector>
+#include <algorithm>
+#include <random>
 
 namespace pong
 {
@@ -76,12 +79,17 @@ namespace pong
     struct ECamera
     {
         CTransform transform;
+        float trauma = 0.0f;
+        float traumaDecay = 1.5f;
+        glm::mat4 offset = glm::mat4(1.0f);
     };
 
     class Game
     {
     private:
-        std::map<int32_t, EPlayer> m_players;
+        // Entities
+        std::map<int32_t, EPlayer>
+            m_players;
         EBall m_ball;
         ETable m_table = {{glm::vec3(c_arenaWidth / 2.0f, -79.0f, c_arenaHeight / 2.0f), glm::quat(glm::vec3(0.0f, glm::radians(90.0f), 0.0f))}};
         ECamera m_camera = {{glm::lookAt(glm::vec3(c_arenaWidth / 2.0f, 250.0f, 2 * c_arenaHeight / 2.0f),
@@ -94,7 +102,12 @@ namespace pong
         std::unique_ptr<Model> m_tableModel;
         std::unique_ptr<Model> m_debugPlane;
 
+        std::unique_ptr<Sound> m_hitSound;
+        std::unique_ptr<Sound> m_smashSound;
+        std::unique_ptr<Sound> m_racketSound;
+
         float CalculateBallHeight(glm::vec2 position, glm::vec2 velocity);
+        bool HasBallHitTable(glm::vec2 position, glm::vec2 velocity);
 
     public:
         Game() = default;

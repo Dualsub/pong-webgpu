@@ -14,17 +14,23 @@ namespace pong
             wgpu::Instance instance;
         } userData = {callback, instance};
 
+        wgpu::RequestAdapterOptions options = {};
+        options.powerPreference = wgpu::PowerPreference::HighPerformance;
+
         instance.RequestAdapter(
-            nullptr,
+            &options,
             [](WGPURequestAdapterStatus status, WGPUAdapter cAdapter,
                const char *message, void *userdata)
             {
-                std::cout << "Adapter status: " << status << std::endl;
                 if (status != WGPURequestAdapterStatus_Success)
                 {
-                    std::cout << "Failed to initialize adapter" << std::endl;
-                    exit(1);
+                    std::string messageString = message ? message : "";
+                    std::cerr << "Failed to initialize adapter:\n"
+                              << "Message: " << messageString << "\n"
+                              << "Status: " << status;
+                    return;
                 }
+
                 wgpu::Adapter adapter = wgpu::Adapter::Acquire(cAdapter);
                 adapter.RequestDevice(
                     nullptr,
@@ -33,11 +39,15 @@ namespace pong
                     {
                         if (status != WGPURequestDeviceStatus_Success)
                         {
-                            exit(1);
+                            std::string messageString = message ? message : "";
+                            std::cerr << "Failed to initialize device:\n"
+                                      << "Message: " << messageString << "\n"
+                                      << "Status: " << status;
+                            return;
                         }
 
                         wgpu::Device device = wgpu::Device::Acquire(cDevice);
-                        UserData *userData = reinterpret_cast<UserData *>(userdata);
+                        UserData *userData = static_cast<UserData *>(userdata);
                         DeviceContext context = {userData->instance, device};
                         userData->callback(context);
                     },

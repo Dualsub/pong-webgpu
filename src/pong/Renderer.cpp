@@ -31,7 +31,8 @@ namespace pong
         view: mat4x4<f32>,
         projection: mat4x4<f32>,
         lightViewProjection: mat4x4<f32>,
-        light: vec3<f32>,
+        lightDirection: vec3<f32>,
+        cameraPosition: vec3<f32>,
         time: f32,
     };
 
@@ -58,11 +59,10 @@ namespace pong
 
     @fragment
     fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-        let ambient = 0.2;
         var visibility = 0.0;
         for (var y = -1; y <= 1; y++) {
             for (var x = -1; x <= 1; x++) {
-                let offset = vec2<f32>(vec2(x, y)) * 1.0 / 1024.0;
+                let offset = vec2<f32>(vec2(x, y)) * 1.0 / 2048.0;
                 visibility += textureSampleCompare(
                     shadowMap, shadowSampler,
                     in.fragPosLightSpace.xy + offset, in.fragPosLightSpace.z - 0.007
@@ -71,10 +71,25 @@ namespace pong
         }
         visibility /= 9.0;
 
+        // vector to point from the light source towards the fragment's position
+        let lightDir = normalize(-uUniforms.lightDirection);
+        let viewDir = normalize(uUniforms.cameraPosition - in.position.xyz);
+
+        // diffuse shading
+        let diff = max(dot(in.normal, lightDir), 0.0);
+        
+        // specular shading
+        let halfWay = normalize(lightDir + viewDir);
+        
+        let spec = pow(max(dot(halfWay, in.normal), 0.0), 0.3);
+        let specular = vec3f(spec);
+        
+        let diffuse = diff * in.color; 
+        let ambient = 0.2 * in.color;
 
         // let linear_color = pow(in.color, vec3f(2.2));
-        let light = (dot(normalize(in.normal), normalize(vec3f(-uUniforms.light))) * 0.5 + 0.5) * visibility;
-        return vec4f(in.color * light * (1.0 - ambient) + in.color * ambient, 1.0);
+        let light = dot(normalize(in.normal), lightDir * 0.5 + 0.5) * visibility;
+        return vec4f(ambient + light * in.color * 0.8, 1.0);
     }
 
     )";
@@ -86,7 +101,8 @@ namespace pong
         view: mat4x4<f32>,
         projection: mat4x4<f32>,
         lightViewProjection: mat4x4<f32>,
-        light: vec3<f32>,
+        lightDirection: vec3<f32>,
+        cameraPosition: vec3<f32>,
         time: f32,
     };
 
@@ -534,7 +550,7 @@ namespace pong
         bufferDesc.mappedAtCreation = false;
 
         m_uniformBuffer = m_device.CreateBuffer(&bufferDesc);
-        m_uniforms.light = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+        m_uniforms.lightDirection = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
 
         return m_uniformBuffer != nullptr;
     }
