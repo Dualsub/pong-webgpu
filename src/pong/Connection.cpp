@@ -124,4 +124,17 @@ namespace pong
 
         emscripten_websocket_send_binary(m_socket, &message, sizeof(InputMessage));
     }
+
+    GameStateMessage *Connection::PopLatestMessage()
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_messages.size() > 0)
+        {
+            GameStateMessage *msg = &m_messages.back();
+            m_messages.pop_back();
+            return msg;
+        }
+
+        return nullptr;
+    }
 }

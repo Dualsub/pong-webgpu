@@ -82,9 +82,10 @@ namespace pong
         alSourcePlay(sourceId);
     }
 
-    void Sound::PlayAt(const glm::vec3 &position, float pitch)
+    void Sound::PlayAt(const glm::vec3 &position, float volume, float pitch)
     {
         alSourcef(sourceId, AL_PITCH, pitch);
+        alSourcef(sourceId, AL_GAIN, volume);
         alSource3f(sourceId, AL_POSITION, position.x, position.y, position.z);
         alSourcePlay(sourceId);
     }

@@ -23,6 +23,8 @@ namespace pong
         m_hitSound = Sound::Create("./dist/ball_hit_1.wav");
         m_smashSound = Sound::Create("./dist/smash_hit.wav");
         m_racketSound = Sound::Create("./dist/racket_hit.wav");
+        m_winSound = Sound::Create("./dist/win.wav");
+        m_loseSound = Sound::Create("./dist/lose.wav");
         Application::GetAudioPlayer().SetListenerPosition(m_camera.transform.position);
 
         Connection &connection = Application::GetConnection();
@@ -95,8 +97,24 @@ namespace pong
             }
 
             EPlayer &player = m_players[msgPlayer.playerId];
-
             glm::vec3 newPlayerPos = glm::vec3(msgPlayer.position.x * c_scaleFactor.x, c_padelTableHitOffset, msgPlayer.position.y * c_scaleFactor.y);
+
+            // Check if player has higher score
+            if (msgPlayer.score > player.score)
+            {
+                if (msgPlayer.playerId == msg->head.playerId)
+                {
+                    m_winSound->PlayAt(m_ball.transform.position, 250.0f);
+                    std::cout << "You won!" << std::endl;
+                }
+                else
+                {
+                    m_loseSound->PlayAt(m_ball.transform.position, 250.0f);
+                    std::cout << "You lost!" << std::endl;
+                }
+            }
+
+            player.score = msgPlayer.score;
 
             if (glm::abs(newPlayerPos.z - player.transform.position.z) > glm::epsilon<float>())
             {
@@ -110,8 +128,7 @@ namespace pong
             player.transform.position = newPlayerPos;
         }
 
-        // Update camera
-
+        // Update camera and play hit sounds
         if (msg->events.hasSmashed)
         {
             m_camera.trauma = 0.6f;
@@ -119,8 +136,6 @@ namespace pong
         }
         else if (msg->events.playerWasHit)
         {
-            std::cout << "New Ball velocity: " << msg->ball.velocity.x << std::endl;
-            std::cout << "Old Ball velocity: " << m_ball.velocity.x << std::endl;
             m_camera.trauma = 0.3f;
             m_racketSound->PlayAt(m_ball.transform.position);
         }
@@ -128,7 +143,7 @@ namespace pong
         {
             // m_camera.trauma = 0.0f;
             float pitch = 1.0f + (glm::abs(dist(gen)) * 0.15f);
-            m_hitSound->PlayAt(m_ball.transform.position, pitch);
+            m_hitSound->PlayAt(m_ball.transform.position, 1.0f, pitch);
         }
         else
         {
@@ -138,9 +153,13 @@ namespace pong
 
         float shake = m_camera.trauma * m_camera.trauma;
 
-        m_camera.offset =
-            glm::rotate(glm::mat4(1.0f), glm::radians(dist(gen) * shake), glm::vec3(0.0f, 1.0f, 0.0f)) *
-            glm::rotate(glm::mat4(1.0f), glm::radians(dist(gen) * shake), glm::vec3(1.0f, 0.0f, 0.0f));
+        const float maxShake = 10.0f;
+        glm::mat4 newOffset =
+            glm::rotate(glm::mat4(1.0f), glm::radians(maxShake * dist(gen) * shake), glm::vec3(0.0f, 1.0f, 0.0f)) *
+            glm::rotate(glm::mat4(1.0f), glm::radians(maxShake * dist(gen) * shake), glm::vec3(1.0f, 0.0f, 0.0f));
+
+        // Asymtotically approach target
+        m_camera.offset = glm::mix(m_camera.offset, newOffset, 5.0f * deltaTime);
     }
 
     void Game::Render(Renderer &renderer)

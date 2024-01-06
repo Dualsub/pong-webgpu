@@ -80,6 +80,7 @@ namespace pong
         GameStateMessage ParseMessage(const uint8_t *message, size_t length);
         std::vector<GameStateMessage> GetMessages() const { return m_messages; }
         GameStateMessage *GetLatestMessage() const { return m_messages.size() > 0 ? const_cast<GameStateMessage *>(&m_messages.back()) : nullptr; }
+        GameStateMessage *PopLatestMessage();
         void AddMessage(const GameStateMessage &message);
 
         void SendInput();

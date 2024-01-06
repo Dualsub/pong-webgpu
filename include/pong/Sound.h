@@ -23,7 +23,7 @@ namespace pong
         Sound &operator=(const Sound &) = delete;
 
         void Play();
-        void PlayAt(const glm::vec3 &position, float pitch = 1.0f);
+        void PlayAt(const glm::vec3 &position, float volume = 1.0f, float pitch = 1.0f);
 
         static std::unique_ptr<Sound> Create(const std::string &path);
     };

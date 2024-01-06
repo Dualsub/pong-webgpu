@@ -62,6 +62,7 @@ namespace pong
         int32_t id = 0;
         float targetAngle = 90.0f;
         float currentAngle = 0.0f;
+        uint32_t score = 0;
         CTransform transform;
     };
 
@@ -105,6 +106,8 @@ namespace pong
         std::unique_ptr<Sound> m_hitSound;
         std::unique_ptr<Sound> m_smashSound;
         std::unique_ptr<Sound> m_racketSound;
+        std::unique_ptr<Sound> m_winSound;
+        std::unique_ptr<Sound> m_loseSound;
 
         float CalculateBallHeight(glm::vec2 position, glm::vec2 velocity);
         bool HasBallHitTable(glm::vec2 position, glm::vec2 velocity);
