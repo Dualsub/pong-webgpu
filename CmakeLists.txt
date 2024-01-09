@@ -11,6 +11,7 @@ add_executable(pong
 "src/pong/InputDevice.cpp"
 "src/pong/Renderer.cpp"
 "src/pong/Model.cpp"
+"src/pong/Texture.cpp"
 "src/pong/Connection.cpp"
 "src/pong/Game.cpp"
 )

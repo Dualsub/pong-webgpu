@@ -2,6 +2,7 @@
 
 #include "pong/Connection.h"
 #include "pong/Model.h"
+#include "pong/Texture.h"
 #include "pong/Sound.h"
 
 #include <glm/glm.hpp>
@@ -102,6 +103,7 @@ namespace pong
         std::unique_ptr<Model> m_paddelModel;
         std::unique_ptr<Model> m_tableModel;
         std::unique_ptr<Model> m_debugPlane;
+        std::unique_ptr<Texture> m_numbersTextureAtlas;
 
         std::unique_ptr<Sound> m_hitSound;
         std::unique_ptr<Sound> m_smashSound;

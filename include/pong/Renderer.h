@@ -2,6 +2,7 @@
 
 #include "pong/Device.h"
 #include "pong/Model.h"
+#include "pong/Texture.h"
 
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_FORCE_LEFT_HANDED
@@ -12,6 +13,8 @@
 
 #include <memory>
 #include <vector>
+#include <array>
+#include <unordered_map>
 
 namespace pong
 {
@@ -19,6 +22,18 @@ namespace pong
     {
         Model *model;
         std::vector<glm::mat4> transforms;
+    };
+
+    struct SpriteBatch
+    {
+        Texture *texture;
+        struct Instance
+        {
+            glm::mat4 transform;
+            glm::vec4 offsetAndSize;
+        };
+
+        std::vector<Instance> instances;
     };
 
     class Renderer
@@ -44,13 +59,23 @@ namespace pong
         // Check alignment
         static_assert(sizeof(Uniforms) % 16 == 0);
 
+        struct SpriteUniforms
+        {
+            glm::mat4 model = glm::mat4(1.0f);
+            glm::mat4 view = glm::mat4(1.0f);
+            glm::mat4 projection = glm::mat4(1.0f);
+            glm::vec4 offsetAndSize = glm::vec4(0.0f);
+        };
+
+        static_assert(sizeof(SpriteUniforms) % 16 == 0);
+
         // Constants
         const wgpu::TextureFormat c_swapChainFormat = wgpu::TextureFormat::BGRA8Unorm;
         const wgpu::TextureFormat c_depthFormat = wgpu::TextureFormat::Depth24Plus;
         const wgpu::TextureFormat c_shadowMapDepthFormat = wgpu::TextureFormat::Depth32Float;
         const size_t c_minUniformBufferOffsetAlignment = 256;
-        const static uint32_t c_width = 1280;
-        const static uint32_t c_height = 720;
+        const static uint32_t c_width = 1920;
+        const static uint32_t c_height = 1080;
         constexpr static glm::vec2 c_shadowMapWorldSize = glm::vec2(400.0f, 200.0f);
         const static uint32_t c_shadowMapSize = 2048;
         const std::string c_canvasSelector = "#canvas";
@@ -69,8 +94,9 @@ namespace pong
         wgpu::Queue m_queue = {};
 
         // Pipeline
-        wgpu::RenderPipeline m_renderPipeline = {};
         wgpu::RenderPipeline m_shadowPipeline = {};
+        wgpu::RenderPipeline m_spritePipeline = {};
+        wgpu::RenderPipeline m_renderPipeline = {};
 
         // Swap chain
         wgpu::SwapChain m_swapChain = {};
@@ -79,9 +105,10 @@ namespace pong
         wgpu::ShaderModule m_shaderModule = {};
 
         // Bind group
-        std::array<wgpu::BindGroupLayout, 2> m_bindGroupLayouts = {};
+        std::array<wgpu::BindGroupLayout, 3> m_bindGroupLayouts = {};
         wgpu::BindGroup m_bindGroup = {};
         wgpu::BindGroup m_shadowBindGroup = {};
+        std::unordered_map<uint32_t, wgpu::BindGroup> m_spriteBindGroups = {};
 
         // Depth texture
         wgpu::Texture m_depthTexture = {};
@@ -95,13 +122,21 @@ namespace pong
         wgpu::Buffer m_uniformBuffer = {};
         Uniforms m_uniforms;
 
+        wgpu::Buffer m_spriteUniformBuffer = {};
+        SpriteUniforms m_spriteUniforms;
+
         // Batches
         std::vector<RenderBatch> m_batches;
+        std::vector<SpriteBatch> m_spriteBatches;
+
+        // Renderer assets
+        std::unique_ptr<Model> m_quad = {};
 
         bool InitializeSurface();
         bool InitializeSwapChain();
         bool InitializeBindGroupLayout();
         bool InitializeShadowPipeline();
+        bool InitializeSpritePipeline();
         bool InitializeRenderPipeline();
         bool InitializeDepthTexture();
         bool InitializeShadowMapTexture();
@@ -109,7 +144,10 @@ namespace pong
         bool InitializeUniforms();
         bool InitializeBindGroup();
 
+        void AddSpriteBindGroup(Texture *texture);
+
         void RenderBatches(wgpu::RenderPassEncoder &pass);
+        void RenderSpriteBatches(wgpu::RenderPassEncoder &pass);
 
     public:
         Renderer() {}
@@ -126,6 +164,20 @@ namespace pong
             m_batches.push_back({model, transforms});
         }
 
+        void SubmitInstances(Texture *texture, const std::vector<SpriteBatch::Instance> &instances)
+        {
+            if (texture == nullptr && texture->GetId())
+                return;
+
+            m_spriteBatches.push_back({texture, instances});
+
+            // Create bind group if it doesn't exist
+            if (m_spriteBindGroups.find(texture->GetId()) == m_spriteBindGroups.end())
+            {
+                AddSpriteBindGroup(texture);
+            }
+        }
+
         void SetCameraView(const glm::mat4 &view)
         {
             m_uniforms.view = view;
@@ -139,5 +191,7 @@ namespace pong
         // Should be moved in the future
         std::unique_ptr<Model> CreateModel(const std::string &path) const { return Model::Create(m_device, m_queue, path); }
         std::unique_ptr<Model> CreateQuad(const glm::vec2 &size, const glm::vec3 &color) const { return Model::CreateQuad(m_device, m_queue, size, color); }
+
+        std::unique_ptr<Texture> CreateTexture(const std::string &path) const { return Texture::Create(m_device, m_queue, path); }
     };
 }

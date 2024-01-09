@@ -20,6 +20,8 @@ namespace pong
         m_ballModel = renderer.CreateModel("./dist/ball.dat");
         m_debugPlane = renderer.CreateQuad({1.0f, 1.0f}, {0.0f, 0.0f, 0.0f});
 
+        m_numbersTextureAtlas = renderer.CreateTexture("./dist/numbers.dat");
+
         m_hitSound = Sound::Create("./dist/ball_hit_1.wav");
         m_smashSound = Sound::Create("./dist/smash_hit.wav");
         m_racketSound = Sound::Create("./dist/racket_hit.wav");
@@ -29,6 +31,8 @@ namespace pong
 
         Connection &connection = Application::GetConnection();
         connection.Initialize(0);
+
+        m_camera.offset = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -1000.0f, -c_arenaHeight / 2.0f));
     }
 
     float Game::CalculateBallHeight(glm::vec2 position, glm::vec2 velocity)
@@ -169,17 +173,29 @@ namespace pong
         renderer.SetCameraView(m_camera.transform.GetMatrix() * m_camera.offset);
 
         std::vector<glm::mat4> playerTransforms = std::vector<glm::mat4>(m_players.size());
+        std::vector<SpriteBatch::Instance> scoreInstances = std::vector<SpriteBatch::Instance>(m_players.size());
         uint32_t i = 0;
+        const float letterWidth = 148.0f;
         for (const auto &[id, player] : m_players)
         {
+            // Player
             float angle = player.currentAngle;
             playerTransforms[i] = player.transform.GetMatrix() * paddelRenderTransformOffset * glm::mat4_cast(glm::quat(glm::vec3(0.0f, glm::radians(angle), glm::radians(90.0f))));
+
+            // Score
+            uint32_t score = player.score % 10;
+            float xOffset = (player.transform.position.x < c_arenaWidth / 2.0f ? -1.0f : 1.0f) * c_arenaWidth / 4.0f;
+            scoreInstances[i].transform = glm::translate(glm::mat4(1.0f), glm::vec3(c_arenaWidth / 2.0f + xOffset, 0.0f, c_arenaHeight / 6.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(letterWidth * 0.1f, 1.0f, -letterWidth * 0.1f));
+            scoreInstances[i].offsetAndSize = glm::vec4(score * letterWidth / m_numbersTextureAtlas->GetWidth(), 0.0f, letterWidth / m_numbersTextureAtlas->GetWidth(), 1.0f);
             i++;
         }
 
         renderer.SubmitInstances(m_paddelModel.get(), playerTransforms);
+        renderer.SubmitInstances(m_numbersTextureAtlas.get(), scoreInstances);
         renderer.SubmitInstances(m_tableModel.get(), {m_table.transform.GetMatrix()});
         renderer.SubmitInstances(m_ballModel.get(), {m_ball.transform.GetMatrix() * ballRenderTransformOffset});
+
+        // Render score
 
         // // For debugging, translate and scale
         // glm::vec3 ballPos = m_ball.transform.position;

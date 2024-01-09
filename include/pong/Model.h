@@ -23,6 +23,12 @@ namespace pong
             glm::vec3 color;
         };
 
+        struct SpriteVertex
+        {
+            glm::vec3 position;
+            glm::vec2 texCoord;
+        };
+
         Model() {}
         Model(const wgpu::Buffer &vertexBuffer, size_t vertexCount, const wgpu::Buffer &indexBuffer, size_t indexCount)
             : m_vertexBuffer(vertexBuffer), m_vertexCount(vertexCount), m_indexBuffer(indexBuffer), m_indexCount(indexCount) {}
@@ -35,5 +41,6 @@ namespace pong
 
         static std::unique_ptr<Model> Create(const wgpu::Device &device, const wgpu::Queue &queue, const std::string &path);
         static std::unique_ptr<Model> CreateQuad(const wgpu::Device &device, const wgpu::Queue &queue, const glm::vec2 &size, const glm::vec3 &color);
+        static std::unique_ptr<Model> CreateSpriteQuad(const wgpu::Device &device, const wgpu::Queue &queue);
     };
 }

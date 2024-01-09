@@ -116,6 +116,45 @@ namespace pong
 
     )";
 
+    const char *spriteShaderSource = R"(
+    struct VertexInput {
+        @location(0) position: vec3f,
+        @location(1) texCoord: vec2f,
+    };
+
+    struct VertexOutput {
+        @builtin(position) position: vec4f,
+        @location(0) texCoord: vec2f,
+    };
+
+    struct SpriteUniforms {
+        model: mat4x4<f32>,
+        view: mat4x4<f32>,
+        projection: mat4x4<f32>,
+        offsetAndSize: vec4<f32>,
+    };
+
+    @group(0) @binding(0) var spriteTexture: texture_2d<f32>;
+    @group(0) @binding(1) var spriteSampler: sampler;
+    @group(0) @binding(2) var<uniform> uUniforms: SpriteUniforms;
+
+    @vertex
+    fn vs_main(in: VertexInput) -> VertexOutput {
+        var out: VertexOutput;
+        var position = vec4f(in.position, 1.0);
+        out.position = uUniforms.projection * uUniforms.view * uUniforms.model * position;
+        out.texCoord = in.texCoord;
+        return out;
+    }
+
+    @fragment
+    fn fs_main(in: VertexOutput) -> @location(0) vec4f {
+        let textCoord = in.texCoord * uUniforms.offsetAndSize.zw + uUniforms.offsetAndSize.xy;
+        return textureSample(spriteTexture, spriteSampler, textCoord);
+    }
+
+    )";
+
     // Helper function to round up to the next multiple of a number.
     uint32_t CeilToNextMultiple(uint32_t value, uint32_t step)
     {
@@ -156,6 +195,12 @@ namespace pong
         if (!InitializeRenderPipeline())
         {
             std::cerr << "Cannot initialize WebGPU pipeline" << std::endl;
+            return false;
+        }
+
+        if (!InitializeSpritePipeline())
+        {
+            std::cerr << "Cannot initialize WebGPU sprite pipeline" << std::endl;
             return false;
         }
 
@@ -251,7 +296,37 @@ namespace pong
 
         m_bindGroupLayouts[1] = m_device.CreateBindGroupLayout(&bindGroupLayoutDesc);
 
-        return m_bindGroupLayouts[0] != nullptr && m_bindGroupLayouts[1] != nullptr;
+        // Sprite binding layout.
+        std::array<wgpu::BindGroupLayoutEntry, 3> spriteBindingLayouts = {};
+        spriteBindingLayouts[0].binding = 0;
+        spriteBindingLayouts[0].visibility = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
+        spriteBindingLayouts[0].texture.sampleType = wgpu::TextureSampleType::Float;
+        spriteBindingLayouts[0].texture.viewDimension = wgpu::TextureViewDimension::e2D;
+
+        spriteBindingLayouts[1].binding = 1;
+        spriteBindingLayouts[1].visibility = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
+        spriteBindingLayouts[1].sampler.type = wgpu::SamplerBindingType::Filtering;
+
+        spriteBindingLayouts[2].binding = 2;
+        spriteBindingLayouts[2].visibility = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
+        spriteBindingLayouts[2].buffer.type = wgpu::BufferBindingType::Uniform;
+        spriteBindingLayouts[2].buffer.minBindingSize = sizeof(SpriteUniforms);
+        spriteBindingLayouts[2].buffer.hasDynamicOffset = true;
+
+        bindGroupLayoutDesc.entryCount = spriteBindingLayouts.size();
+        bindGroupLayoutDesc.entries = spriteBindingLayouts.data();
+
+        m_bindGroupLayouts[2] = m_device.CreateBindGroupLayout(&bindGroupLayoutDesc);
+
+        for (auto &&layout : m_bindGroupLayouts)
+        {
+            if (layout == nullptr)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     bool Renderer::InitializeShadowPipeline()
@@ -310,28 +385,6 @@ namespace pong
         pipelineDesc.primitive.frontFace = wgpu::FrontFace::CCW;
         pipelineDesc.primitive.cullMode = wgpu::CullMode::Front;
 
-        // // Fragment and blend state.
-        // wgpu::FragmentState fragmentState;
-        // fragmentState.module = m_shaderModule;
-        // fragmentState.entryPoint = "fs_main";
-        // fragmentState.constantCount = 0;
-        // fragmentState.constants = nullptr;
-
-        // wgpu::BlendState blendState;
-        // blendState.color.srcFactor = wgpu::BlendFactor::SrcAlpha;
-        // blendState.color.dstFactor = wgpu::BlendFactor::OneMinusSrcAlpha;
-        // blendState.color.operation = wgpu::BlendOperation::Add;
-
-        // wgpu::ColorTargetState colorTarget;
-        // colorTarget.format = wgpu::TextureFormat::Depth32Float;
-        // colorTarget.blend = &blendState;
-        // colorTarget.writeMask = wgpu::ColorWriteMask::All;
-
-        // fragmentState.targetCount = 1;
-        // fragmentState.targets = &colorTarget;
-
-        // pipelineDesc.fragment = &fragmentState;
-
         // Depth testing.
         wgpu::DepthStencilState depthStencilState = {};
         depthStencilState.depthCompare = wgpu::CompareFunction::Less;
@@ -355,6 +408,108 @@ namespace pong
         m_shadowPipeline = m_device.CreateRenderPipeline(&pipelineDesc);
 
         return m_shadowPipeline != nullptr;
+    }
+
+    bool Renderer::InitializeSpritePipeline()
+    {
+        std::cout << "Initializing WebGPU sprite pipeline" << std::endl;
+        wgpu::RenderPipelineDescriptor pipelineDesc = {};
+
+        // Shader source.
+        wgpu::ShaderModuleDescriptor shaderDesc;
+        wgpu::ShaderModuleWGSLDescriptor shaderCodeDesc;
+        // Set the chained struct's header
+        shaderCodeDesc.nextInChain = nullptr;
+        shaderCodeDesc.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
+        // Connect the chain
+        shaderDesc.nextInChain = &shaderCodeDesc;
+        shaderCodeDesc.code = spriteShaderSource;
+        m_shaderModule = m_device.CreateShaderModule(&shaderDesc);
+
+        // Vertex state.
+        wgpu::VertexBufferLayout vertexBufferLayout;
+        vertexBufferLayout.arrayStride = sizeof(Model::SpriteVertex);
+        vertexBufferLayout.stepMode = wgpu::VertexStepMode::Vertex;
+
+        std::array<wgpu::VertexAttribute, 2> attributes;
+
+        wgpu::VertexAttribute &positionAttribute = attributes[0];
+        positionAttribute.shaderLocation = 0;
+        positionAttribute.offset = 0;
+        positionAttribute.format = wgpu::VertexFormat::Float32x3;
+
+        wgpu::VertexAttribute &texCoordAttribute = attributes[1];
+        texCoordAttribute.shaderLocation = 1;
+        texCoordAttribute.offset = sizeof(glm::vec3);
+        texCoordAttribute.format = wgpu::VertexFormat::Float32x2;
+
+        vertexBufferLayout.attributeCount = attributes.size();
+        vertexBufferLayout.attributes = attributes.data();
+
+        pipelineDesc.vertex.bufferCount = 1;
+        pipelineDesc.vertex.buffers = &vertexBufferLayout;
+
+        pipelineDesc.vertex.module = m_shaderModule;
+        pipelineDesc.vertex.entryPoint = "vs_main";
+        pipelineDesc.vertex.constantCount = 0;
+        pipelineDesc.vertex.constants = nullptr;
+
+        // Primitive state.
+        pipelineDesc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
+        pipelineDesc.primitive.stripIndexFormat = wgpu::IndexFormat::Undefined;
+        pipelineDesc.primitive.frontFace = wgpu::FrontFace::CCW;
+        pipelineDesc.primitive.cullMode = wgpu::CullMode::None;
+
+        // Fragment and blend state.
+        wgpu::FragmentState fragmentState;
+        fragmentState.module = m_shaderModule;
+        fragmentState.entryPoint = "fs_main";
+        fragmentState.constantCount = 0;
+        fragmentState.constants = nullptr;
+
+        wgpu::BlendState blendState;
+        blendState.color.srcFactor = wgpu::BlendFactor::SrcAlpha;
+        blendState.color.dstFactor = wgpu::BlendFactor::OneMinusSrcAlpha;
+        blendState.color.operation = wgpu::BlendOperation::Add;
+
+        wgpu::ColorTargetState colorTarget;
+        colorTarget.format = wgpu::TextureFormat::BGRA8Unorm;
+        colorTarget.blend = &blendState;
+        colorTarget.writeMask = wgpu::ColorWriteMask::All;
+
+        fragmentState.targetCount = 1;
+        fragmentState.targets = &colorTarget;
+
+        pipelineDesc.fragment = &fragmentState;
+
+        // Depth testing.
+        wgpu::DepthStencilState depthStencilState = {};
+        depthStencilState.depthCompare = wgpu::CompareFunction::Less;
+        depthStencilState.depthWriteEnabled = true;
+        depthStencilState.format = c_depthFormat;
+
+        // Deactivate the stencil alltogether
+        depthStencilState.stencilReadMask = 0;
+        depthStencilState.stencilWriteMask = 0;
+
+        pipelineDesc.depthStencil = &depthStencilState;
+
+        // Multisampling is disabled.
+        pipelineDesc.multisample.count = 1;
+        pipelineDesc.multisample.mask = ~0u;
+        pipelineDesc.multisample.alphaToCoverageEnabled = false;
+
+        // Create the pipeline layout
+        wgpu::PipelineLayoutDescriptor layoutDesc{};
+        layoutDesc.bindGroupLayoutCount = 1;
+        layoutDesc.bindGroupLayouts = &m_bindGroupLayouts[2];
+        wgpu::PipelineLayout layout = m_device.CreatePipelineLayout(&layoutDesc);
+        pipelineDesc.layout = layout;
+
+        // Create the pipeline.
+        m_spritePipeline = m_device.CreateRenderPipeline(&pipelineDesc);
+
+        return m_spritePipeline != nullptr;
     }
 
     bool Renderer::InitializeRenderPipeline()
@@ -454,7 +609,7 @@ namespace pong
 
         // Create the pipeline layout
         wgpu::PipelineLayoutDescriptor layoutDesc{};
-        layoutDesc.bindGroupLayoutCount = m_bindGroupLayouts.size();
+        layoutDesc.bindGroupLayoutCount = 2;
         layoutDesc.bindGroupLayouts = m_bindGroupLayouts.data();
         wgpu::PipelineLayout layout = m_device.CreatePipelineLayout(&layoutDesc);
         pipelineDesc.layout = layout;
@@ -535,8 +690,9 @@ namespace pong
 
     bool Renderer::InitializeGeometry()
     {
-        // std::cout << "Initializing WebGPU geometry" << std::endl;
-        return true;
+        std::cout << "Initializing WebGPU geometry" << std::endl;
+        m_quad = Model::CreateSpriteQuad(m_device, m_queue);
+        return m_quad != nullptr;
     }
 
     bool Renderer::InitializeUniforms()
@@ -552,7 +708,15 @@ namespace pong
         m_uniformBuffer = m_device.CreateBuffer(&bufferDesc);
         m_uniforms.lightDirection = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
 
-        return m_uniformBuffer != nullptr;
+        wgpu::BufferDescriptor spriteBufferDesc{};
+        const size_t spriteBufferStride = CeilToNextMultiple(sizeof(SpriteUniforms), c_minUniformBufferOffsetAlignment);
+        spriteBufferDesc.size = 5 * spriteBufferStride;
+        spriteBufferDesc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Uniform;
+        spriteBufferDesc.mappedAtCreation = false;
+
+        m_spriteUniformBuffer = m_device.CreateBuffer(&spriteBufferDesc);
+
+        return m_uniformBuffer != nullptr && m_spriteUniformBuffer != nullptr;
     }
 
     bool Renderer::InitializeBindGroup()
@@ -568,6 +732,7 @@ namespace pong
         bindGroupDesc.layout = m_bindGroupLayouts[0];
         bindGroupDesc.entryCount = 1;
         bindGroupDesc.entries = &uniformBinding;
+        std::cout << "hello" << std::endl;
         m_bindGroup = m_device.CreateBindGroup(&bindGroupDesc);
 
         std::array<wgpu::BindGroupEntry, 2> shadowMapBindings{};
@@ -583,6 +748,32 @@ namespace pong
         m_shadowBindGroup = m_device.CreateBindGroup(&bindGroupDesc);
 
         return m_bindGroup != nullptr && m_shadowBindGroup != nullptr;
+    }
+
+    void Renderer::AddSpriteBindGroup(Texture *texture)
+    {
+        if (!texture)
+        {
+            return;
+        }
+
+        std::array<wgpu::BindGroupEntry, 3> spriteBindings = {};
+        spriteBindings[0].binding = 0;
+        spriteBindings[0].textureView = texture->GetTextureView();
+
+        spriteBindings[1].binding = 1;
+        spriteBindings[1].sampler = texture->GetSampler();
+
+        spriteBindings[2].binding = 2;
+        spriteBindings[2].buffer = m_spriteUniformBuffer;
+        spriteBindings[2].size = sizeof(SpriteUniforms);
+
+        wgpu::BindGroupDescriptor bindGroupDesc{};
+        bindGroupDesc.layout = m_bindGroupLayouts[2];
+        bindGroupDesc.entryCount = spriteBindings.size();
+        bindGroupDesc.entries = spriteBindings.data();
+
+        m_spriteBindGroups.emplace(texture->GetId(), m_device.CreateBindGroup(&bindGroupDesc));
     }
 
     void Renderer::RenderBatches(wgpu::RenderPassEncoder &pass)
@@ -621,6 +812,43 @@ namespace pong
                 index++;
             }
         }
+    }
+
+    void Renderer::RenderSpriteBatches(wgpu::RenderPassEncoder &pass)
+    {
+        static const size_t uniformBufferStride = CeilToNextMultiple(sizeof(SpriteUniforms), c_minUniformBufferOffsetAlignment);
+        m_spriteUniforms.projection = m_uniforms.projection;
+        m_spriteUniforms.view = m_uniforms.view;
+        SpriteUniforms uniforms = m_spriteUniforms;
+
+        size_t vertexCount = m_quad->GetVertexCount();
+        pass.SetVertexBuffer(0, m_quad->GetVertexBuffer(), 0, vertexCount * sizeof(Model::SpriteVertex));
+
+        size_t indexCount = m_quad->GetIndexCount();
+        pass.SetIndexBuffer(m_quad->GetIndexBuffer(), wgpu::IndexFormat::Uint32, 0, indexCount * sizeof(uint32_t));
+
+        uint32_t index = 0;
+        for (auto &&batch : m_spriteBatches)
+        {
+            if (batch.texture == nullptr || batch.texture->GetId() == 0 || m_spriteBindGroups.find(batch.texture->GetId()) == m_spriteBindGroups.end())
+            {
+                continue;
+            }
+
+            wgpu::BindGroup &bindGroup = m_spriteBindGroups[batch.texture->GetId()];
+            for (auto &&instance : batch.instances)
+            {
+                uint32_t dynamicOffset = index * uniformBufferStride;
+                uniforms.model = instance.transform;
+                uniforms.offsetAndSize = instance.offsetAndSize;
+                m_queue.WriteBuffer(m_spriteUniformBuffer, dynamicOffset, &uniforms, sizeof(SpriteUniforms));
+                pass.SetBindGroup(0, bindGroup, 1, &dynamicOffset);
+                pass.DrawIndexed(indexCount);
+                index++;
+            }
+        }
+
+        m_spriteBatches.clear();
     }
 
     void Renderer::OnResize(uint32_t width, uint32_t height)
@@ -707,6 +935,10 @@ namespace pong
             renderPass.SetPipeline(m_renderPipeline);
             renderPass.SetBindGroup(1, m_shadowBindGroup);
             RenderBatches(renderPass);
+
+            renderPass.SetPipeline(m_spritePipeline);
+            RenderSpriteBatches(renderPass);
+
             renderPass.End();
         }
 
@@ -733,5 +965,4 @@ namespace pong
     void Renderer::Terminate()
     {
     }
-
 }

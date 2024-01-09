@@ -96,4 +96,38 @@ namespace pong
             indexBuffer,
             indices.size());
     }
+
+    std::unique_ptr<Model> Model::CreateSpriteQuad(const wgpu::Device &device, const wgpu::Queue &queue)
+    {
+        std::vector<SpriteVertex> vertices = {
+            {{-0.5f, 0.0f, -0.5f}, {0.0f, 1.0f}},
+            {{-0.5f, 0.0f, 0.5f}, {0.0f, 0.0f}},
+            {{0.5f, 0.0f, 0.5f}, {1.0f, 0.0f}},
+            {{0.5f, 0.0f, -0.5f}, {1.0f, 1.0f}}};
+        std::vector<uint32_t> indices = {
+            0, 1, 2,
+            0, 2, 3};
+
+        // Create vertex buffer
+        wgpu::BufferDescriptor bufferDesc;
+        bufferDesc.size = vertices.size() * sizeof(SpriteVertex);
+        bufferDesc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Vertex;
+        bufferDesc.mappedAtCreation = false;
+        wgpu::Buffer vertexBuffer = device.CreateBuffer(&bufferDesc);
+
+        queue.WriteBuffer(vertexBuffer, 0, vertices.data(), bufferDesc.size);
+
+        bufferDesc.size = indices.size() * sizeof(uint32_t);
+        bufferDesc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Index;
+        wgpu::Buffer indexBuffer = device.CreateBuffer(&bufferDesc);
+
+        // Upload geometry data to the buffer
+        queue.WriteBuffer(indexBuffer, 0, indices.data(), bufferDesc.size);
+
+        return std::make_unique<Model>(
+            vertexBuffer,
+            vertices.size(),
+            indexBuffer,
+            indices.size());
+    }
 }
