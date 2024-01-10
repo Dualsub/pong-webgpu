@@ -75,7 +75,7 @@ namespace pong
         Connection() = default;
         ~Connection() = default;
 
-        void Initialize(uint32_t gameId = 0);
+        void Initialize();
 
         GameStateMessage ParseMessage(const uint8_t *message, size_t length);
         std::vector<GameStateMessage> GetMessages() const { return m_messages; }

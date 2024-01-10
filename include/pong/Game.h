@@ -2,6 +2,7 @@
 
 #include "pong/Connection.h"
 #include "pong/Model.h"
+#include "pong/Renderer.h"
 #include "pong/Texture.h"
 #include "pong/Sound.h"
 
@@ -113,6 +114,7 @@ namespace pong
 
         float CalculateBallHeight(glm::vec2 position, glm::vec2 velocity);
         bool HasBallHitTable(glm::vec2 position, glm::vec2 velocity);
+        void PositionScoreInstances(std::vector<struct SpriteBatch::Instance> &instances, uint32_t score, glm::vec3 origin);
 
     public:
         Game() = default;

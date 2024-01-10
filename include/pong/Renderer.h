@@ -74,11 +74,13 @@ namespace pong
         const wgpu::TextureFormat c_depthFormat = wgpu::TextureFormat::Depth24Plus;
         const wgpu::TextureFormat c_shadowMapDepthFormat = wgpu::TextureFormat::Depth32Float;
         const size_t c_minUniformBufferOffsetAlignment = 256;
-        const static uint32_t c_width = 1920;
-        const static uint32_t c_height = 1080;
+        const static uint32_t c_width = 1280;
+        const static uint32_t c_height = 720;
         constexpr static glm::vec2 c_shadowMapWorldSize = glm::vec2(400.0f, 200.0f);
         const static uint32_t c_shadowMapSize = 2048;
         const std::string c_canvasSelector = "#canvas";
+        const uint32_t c_maxInstances = 1000;
+        const uint32_t c_maxSprites = 10;
 
         // Window
         uint32_t m_width = c_width;
@@ -125,6 +127,8 @@ namespace pong
         wgpu::Buffer m_spriteUniformBuffer = {};
         SpriteUniforms m_spriteUniforms;
 
+        wgpu::Buffer m_spriteInstanceBuffer = {};
+
         // Batches
         std::vector<RenderBatch> m_batches;
         std::vector<SpriteBatch> m_spriteBatches;
@@ -155,9 +159,9 @@ namespace pong
 
         void Run(void (*mainLoopCallback)(void));
 
-        bool Initialize(const DeviceContext &context);
+        bool Initialize(const DeviceContext &context, uint32_t width, uint32_t height);
 
-        void OnResize(uint32_t width, uint32_t height);
+        void Resize(uint32_t width, uint32_t height);
 
         void SubmitInstances(Model *model, const std::vector<glm::mat4> &transforms)
         {

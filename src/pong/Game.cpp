@@ -30,7 +30,7 @@ namespace pong
         Application::GetAudioPlayer().SetListenerPosition(m_camera.transform.position);
 
         Connection &connection = Application::GetConnection();
-        connection.Initialize(0);
+        connection.Initialize();
 
         m_camera.offset = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -1000.0f, -c_arenaHeight / 2.0f));
     }
@@ -65,6 +65,32 @@ namespace pong
         bool value = hasBounced && !lastHasBounced;
         lastHasBounced = hasBounced;
         return value;
+    }
+
+    void Game::PositionScoreInstances(std::vector<SpriteBatch::Instance> &instances, uint32_t score, glm::vec3 origin)
+    {
+        const float letterWidth = 148.0f;
+        const float letterWorldWidth = letterWidth * 0.1f;
+        const float letterSpacing = -4.0f;
+
+        std::string scoreText = std::to_string(score);
+        instances.resize(instances.size() + scoreText.size());
+
+        glm::vec3 start = glm::vec3(-(scoreText.size() * letterWorldWidth + letterSpacing * (scoreText.size() - 1)) / 2.0f, 0.0f, 0.0f);
+        for (uint32_t i = 0; i < scoreText.size(); i++)
+        {
+            SpriteBatch::Instance instance;
+            char c = scoreText[i];
+            uint32_t number = c - '0';
+
+            // Add a tiny amount of offset to avoid z-fighting
+            glm::vec3 offset = glm::vec3(i * (letterWorldWidth + letterSpacing), i * 0.1f, 0.0f);
+            glm::vec3 position = (start + offset) + origin;
+            instance.transform = glm::translate(glm::mat4(1.0f), position) * glm::scale(glm::mat4(1.0f), glm::vec3(letterWorldWidth, 1.0f, -letterWorldWidth));
+            instance.offsetAndSize = glm::vec4(number * letterWidth / m_numbersTextureAtlas->GetWidth(), 0.0f, letterWidth / m_numbersTextureAtlas->GetWidth(), 1.0f);
+
+            instances[i + instances.size() - scoreText.size()] = instance;
+        }
     }
 
     void Game::Update(float deltaTime)
@@ -162,6 +188,9 @@ namespace pong
             glm::rotate(glm::mat4(1.0f), glm::radians(maxShake * dist(gen) * shake), glm::vec3(0.0f, 1.0f, 0.0f)) *
             glm::rotate(glm::mat4(1.0f), glm::radians(maxShake * dist(gen) * shake), glm::vec3(1.0f, 0.0f, 0.0f));
 
+        glm::vec3 ballTranslation = glm::vec3(m_ball.transform.position.x - c_arenaWidth / 2.0f, 0.0f, m_ball.transform.position.z - c_arenaHeight / 2.0f);
+        newOffset = glm::translate(newOffset, -ballTranslation * 0.05f);
+
         // Asymtotically approach target
         m_camera.offset = glm::mix(m_camera.offset, newOffset, 5.0f * deltaTime);
     }
@@ -183,10 +212,9 @@ namespace pong
             playerTransforms[i] = player.transform.GetMatrix() * paddelRenderTransformOffset * glm::mat4_cast(glm::quat(glm::vec3(0.0f, glm::radians(angle), glm::radians(90.0f))));
 
             // Score
-            uint32_t score = player.score % 10;
             float xOffset = (player.transform.position.x < c_arenaWidth / 2.0f ? -1.0f : 1.0f) * c_arenaWidth / 4.0f;
-            scoreInstances[i].transform = glm::translate(glm::mat4(1.0f), glm::vec3(c_arenaWidth / 2.0f + xOffset, 0.0f, c_arenaHeight / 6.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(letterWidth * 0.1f, 1.0f, -letterWidth * 0.1f));
-            scoreInstances[i].offsetAndSize = glm::vec4(score * letterWidth / m_numbersTextureAtlas->GetWidth(), 0.0f, letterWidth / m_numbersTextureAtlas->GetWidth(), 1.0f);
+            PositionScoreInstances(scoreInstances, player.score, glm::vec3(c_arenaWidth / 2.0f + xOffset, 0.0f, c_arenaHeight / 6.0f));
+
             i++;
         }
 
@@ -194,8 +222,6 @@ namespace pong
         renderer.SubmitInstances(m_numbersTextureAtlas.get(), scoreInstances);
         renderer.SubmitInstances(m_tableModel.get(), {m_table.transform.GetMatrix()});
         renderer.SubmitInstances(m_ballModel.get(), {m_ball.transform.GetMatrix() * ballRenderTransformOffset});
-
-        // Render score
 
         // // For debugging, translate and scale
         // glm::vec3 ballPos = m_ball.transform.position;

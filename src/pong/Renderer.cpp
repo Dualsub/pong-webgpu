@@ -118,6 +118,7 @@ namespace pong
 
     const char *spriteShaderSource = R"(
     struct VertexInput {
+        @builtin(instance_index) instanceIndex: u32,
         @location(0) position: vec3f,
         @location(1) texCoord: vec2f,
     };
@@ -134,23 +135,29 @@ namespace pong
         offsetAndSize: vec4<f32>,
     };
 
+    struct SpriteInstance {
+        transform: mat4x4<f32>,
+        offsetAndSize: vec4<f32>,
+    }
+
     @group(0) @binding(0) var spriteTexture: texture_2d<f32>;
     @group(0) @binding(1) var spriteSampler: sampler;
     @group(0) @binding(2) var<uniform> uUniforms: SpriteUniforms;
+    @group(0) @binding(3) var<storage, read> spriteInstanceBuffer: array<SpriteInstance>;
 
     @vertex
     fn vs_main(in: VertexInput) -> VertexOutput {
         var out: VertexOutput;
+        let instance = spriteInstanceBuffer[in.instanceIndex];
         var position = vec4f(in.position, 1.0);
-        out.position = uUniforms.projection * uUniforms.view * uUniforms.model * position;
-        out.texCoord = in.texCoord;
+        out.position = uUniforms.projection * uUniforms.view * instance.transform * position;
+        out.texCoord = in.texCoord * instance.offsetAndSize.zw + instance.offsetAndSize.xy;
         return out;
     }
 
     @fragment
     fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-        let textCoord = in.texCoord * uUniforms.offsetAndSize.zw + uUniforms.offsetAndSize.xy;
-        return textureSample(spriteTexture, spriteSampler, textCoord);
+        return textureSample(spriteTexture, spriteSampler, in.texCoord);
     }
 
     )";
@@ -162,8 +169,10 @@ namespace pong
         return step * divide_and_ceil;
     }
 
-    bool Renderer::Initialize(const DeviceContext &context)
+    bool Renderer::Initialize(const DeviceContext &context, uint32_t width, uint32_t height)
     {
+        m_width = width;
+        m_height = height;
         m_instance = context.instance;
         m_device = context.device;
         m_queue = m_device.GetQueue();
@@ -297,7 +306,7 @@ namespace pong
         m_bindGroupLayouts[1] = m_device.CreateBindGroupLayout(&bindGroupLayoutDesc);
 
         // Sprite binding layout.
-        std::array<wgpu::BindGroupLayoutEntry, 3> spriteBindingLayouts = {};
+        std::array<wgpu::BindGroupLayoutEntry, 4> spriteBindingLayouts = {};
         spriteBindingLayouts[0].binding = 0;
         spriteBindingLayouts[0].visibility = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
         spriteBindingLayouts[0].texture.sampleType = wgpu::TextureSampleType::Float;
@@ -311,7 +320,13 @@ namespace pong
         spriteBindingLayouts[2].visibility = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
         spriteBindingLayouts[2].buffer.type = wgpu::BufferBindingType::Uniform;
         spriteBindingLayouts[2].buffer.minBindingSize = sizeof(SpriteUniforms);
-        spriteBindingLayouts[2].buffer.hasDynamicOffset = true;
+        spriteBindingLayouts[2].buffer.hasDynamicOffset = false;
+
+        spriteBindingLayouts[3].binding = 3;
+        spriteBindingLayouts[3].visibility = wgpu::ShaderStage::Vertex;
+        spriteBindingLayouts[3].buffer.type = wgpu::BufferBindingType::ReadOnlyStorage;
+        spriteBindingLayouts[3].buffer.minBindingSize = sizeof(SpriteBatch::Instance) * c_maxSprites;
+        spriteBindingLayouts[3].buffer.hasDynamicOffset = false;
 
         bindGroupLayoutDesc.entryCount = spriteBindingLayouts.size();
         bindGroupLayoutDesc.entries = spriteBindingLayouts.data();
@@ -707,6 +722,7 @@ namespace pong
 
         m_uniformBuffer = m_device.CreateBuffer(&bufferDesc);
         m_uniforms.lightDirection = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+        m_uniforms.projection = glm::perspective(glm::radians(52.5f), float(m_width) / float(m_height), 0.1f, 1000.0f);
 
         wgpu::BufferDescriptor spriteBufferDesc{};
         const size_t spriteBufferStride = CeilToNextMultiple(sizeof(SpriteUniforms), c_minUniformBufferOffsetAlignment);
@@ -715,6 +731,13 @@ namespace pong
         spriteBufferDesc.mappedAtCreation = false;
 
         m_spriteUniformBuffer = m_device.CreateBuffer(&spriteBufferDesc);
+
+        wgpu::BufferDescriptor instanceBufferDesc{};
+        instanceBufferDesc.size = c_maxSprites * sizeof(SpriteBatch::Instance);
+        instanceBufferDesc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Storage;
+        instanceBufferDesc.mappedAtCreation = false;
+
+        m_spriteInstanceBuffer = m_device.CreateBuffer(&instanceBufferDesc);
 
         return m_uniformBuffer != nullptr && m_spriteUniformBuffer != nullptr;
     }
@@ -757,7 +780,7 @@ namespace pong
             return;
         }
 
-        std::array<wgpu::BindGroupEntry, 3> spriteBindings = {};
+        std::array<wgpu::BindGroupEntry, 4> spriteBindings = {};
         spriteBindings[0].binding = 0;
         spriteBindings[0].textureView = texture->GetTextureView();
 
@@ -767,6 +790,10 @@ namespace pong
         spriteBindings[2].binding = 2;
         spriteBindings[2].buffer = m_spriteUniformBuffer;
         spriteBindings[2].size = sizeof(SpriteUniforms);
+
+        spriteBindings[3].binding = 3;
+        spriteBindings[3].buffer = m_spriteInstanceBuffer;
+        spriteBindings[3].size = c_maxSprites * sizeof(SpriteBatch::Instance);
 
         wgpu::BindGroupDescriptor bindGroupDesc{};
         bindGroupDesc.layout = m_bindGroupLayouts[2];
@@ -816,10 +843,11 @@ namespace pong
 
     void Renderer::RenderSpriteBatches(wgpu::RenderPassEncoder &pass)
     {
-        static const size_t uniformBufferStride = CeilToNextMultiple(sizeof(SpriteUniforms), c_minUniformBufferOffsetAlignment);
         m_spriteUniforms.projection = m_uniforms.projection;
         m_spriteUniforms.view = m_uniforms.view;
         SpriteUniforms uniforms = m_spriteUniforms;
+
+        m_queue.WriteBuffer(m_spriteUniformBuffer, 0, &uniforms, sizeof(SpriteUniforms));
 
         size_t vertexCount = m_quad->GetVertexCount();
         pass.SetVertexBuffer(0, m_quad->GetVertexBuffer(), 0, vertexCount * sizeof(Model::SpriteVertex));
@@ -830,34 +858,36 @@ namespace pong
         uint32_t index = 0;
         for (auto &&batch : m_spriteBatches)
         {
-            if (batch.texture == nullptr || batch.texture->GetId() == 0 || m_spriteBindGroups.find(batch.texture->GetId()) == m_spriteBindGroups.end())
+            if (batch.texture == nullptr || batch.texture->GetId() == 0 || m_spriteBindGroups.find(batch.texture->GetId()) == m_spriteBindGroups.end() || batch.instances.empty())
             {
                 continue;
             }
 
             wgpu::BindGroup &bindGroup = m_spriteBindGroups[batch.texture->GetId()];
-            for (auto &&instance : batch.instances)
-            {
-                uint32_t dynamicOffset = index * uniformBufferStride;
-                uniforms.model = instance.transform;
-                uniforms.offsetAndSize = instance.offsetAndSize;
-                m_queue.WriteBuffer(m_spriteUniformBuffer, dynamicOffset, &uniforms, sizeof(SpriteUniforms));
-                pass.SetBindGroup(0, bindGroup, 1, &dynamicOffset);
-                pass.DrawIndexed(indexCount);
-                index++;
-            }
+            pass.SetBindGroup(0, bindGroup, 0, nullptr);
+
+            m_queue.WriteBuffer(m_spriteInstanceBuffer, 0, batch.instances.data(), batch.instances.size() * sizeof(SpriteBatch::Instance));
+
+            pass.DrawIndexed(indexCount, batch.instances.size());
         }
 
         m_spriteBatches.clear();
     }
 
-    void Renderer::OnResize(uint32_t width, uint32_t height)
+    void Renderer::Resize(uint32_t width, uint32_t height)
     {
         std::cout << "Resizing WebGPU surface to " << width << "x" << height << std::endl;
         m_width = width;
         m_height = height;
 
+        m_swapChain.Release();
         InitializeSwapChain();
+
+        m_depthTexture.Release();
+        m_depthTextureView.Release();
+        InitializeDepthTexture();
+
+        m_uniforms.projection = glm::perspective(glm::radians(52.5f), float(m_width) / float(m_height), 0.1f, 1000.0f);
     }
 
     void Renderer::Render()

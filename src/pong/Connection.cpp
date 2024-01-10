@@ -1,9 +1,27 @@
 #include "pong/Connection.h"
 
+#include <emscripten/emscripten.h>
+
 #include <iostream>
 
 namespace pong
 {
+    uint32_t GetGameIdFromUrl()
+    {
+        return EM_ASM_INT(
+            const url = new URL(window.location.href);
+            const id = url.searchParams.get("id") || 0;
+            return id;);
+    }
+
+    bool GetAIFlagFromUrl()
+    {
+        return EM_ASM_INT(
+                   const url = new URL(window.location.href);
+                   const ai = url.searchParams.get("ai") === "true";
+                   return ai ? 1 : 0;) == 1;
+    }
+
     EM_BOOL onopen(int eventType, const EmscriptenWebSocketOpenEvent *websocketEvent, void *userData)
     {
         Connection *connection = reinterpret_cast<Connection *>(userData);
@@ -35,7 +53,7 @@ namespace pong
         return EM_TRUE;
     }
 
-    void Connection::Initialize(uint32_t gameId)
+    void Connection::Initialize()
     {
         if (!emscripten_websocket_is_supported())
         {
@@ -43,12 +61,11 @@ namespace pong
             exit(1);
         }
 
-        std::string url = "ws://localhost:5000/play?id=" + std::to_string(gameId) + "&ai=true";
+        uint32_t gameId = GetGameIdFromUrl();
+        bool ai = GetAIFlagFromUrl();
+        std::string url = "ws://localhost:5000/play?id=" + std::to_string(gameId) + "&ai=" + (ai ? "true" : "false");
 
-        EmscriptenWebSocketCreateAttributes wsAttrs = {
-            url.c_str(),
-            NULL,
-            EM_TRUE};
+        EmscriptenWebSocketCreateAttributes wsAttrs = {url.c_str(), NULL, EM_TRUE};
 
         m_socket = emscripten_websocket_new(&wsAttrs);
         emscripten_websocket_set_onopen_callback(m_socket, this, onopen);

@@ -17,15 +17,12 @@ namespace pong
 
     void Application::Run(const DeviceContext &context)
     {
-        // if (!glfwInit())
-        // {
-        //     return;
-        // }
+        int width = 0;
+        int height = 0;
 
-        // glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        // GLFWwindow *window = glfwCreateWindow(640, 480, "WebGPU window", nullptr, nullptr);
+        emscripten_get_canvas_element_size("#canvas", &width, &height);
 
-        if (!m_renderer.Initialize(context))
+        if (!m_renderer.Initialize(context, uint32_t(width), uint32_t(height)))
         {
             std::cerr << "Failed to initialize renderer" << std::endl;
             return;
@@ -45,7 +42,17 @@ namespace pong
 
         Initialize();
 
-#if defined(__EMSCRIPTEN__)
+        emscripten_set_resize_callback(
+            EMSCRIPTEN_EVENT_TARGET_WINDOW,
+            this,
+            true,
+            [](int eventType, const EmscriptenUiEvent *uiEvent, void *userData) -> EM_BOOL
+            {
+                auto *app = reinterpret_cast<Application *>(userData);
+                app->m_renderer.Resize(uiEvent->windowInnerWidth, uiEvent->windowInnerHeight);
+                return EM_TRUE;
+            });
+
         emscripten_set_main_loop_arg(
             [](void *arg)
             {
@@ -54,13 +61,6 @@ namespace pong
                 app->Render();
             },
             this, c_fps, true);
-#else
-        while (!glfwWindowShouldClose(window))
-        {
-            glfwPollEvents();
-            m_renderer.Render();
-        }
-#endif
     }
 
     void Application::Initialize()
