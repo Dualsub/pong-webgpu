@@ -15,6 +15,10 @@ def main():
 
     print('Loading image...')
     image = cv.imread(image_path, cv.IMREAD_UNCHANGED)
+    # Add alpha channel if image has only 3 channels
+    if image.shape[2] == 3:
+        image = cv.cvtColor(image, cv.COLOR_BGR2RGBA)
+
     print("image: ", image.shape, image.itemsize)
 
     print('Writing to file...')

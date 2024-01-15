@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <random>
+#include <set>
 #include <stdio.h>
 
 namespace pong
@@ -18,7 +19,7 @@ namespace pong
         m_tableModel = renderer.CreateModel("./dist/table.dat");
         m_paddelModel = renderer.CreateModel("./dist/racket.dat");
         m_ballModel = renderer.CreateModel("./dist/ball.dat");
-        m_debugPlane = renderer.CreateQuad({1.0f, 1.0f}, {0.0f, 0.0f, 0.0f});
+        // m_debugPlane = renderer.CreateQuad({1.0f, 1.0f}, glm::vec3(156, 72, 72) * 1.0f / 255.0f);
 
         m_numbersTextureAtlas = renderer.CreateTexture("./dist/numbers.dat");
 
@@ -37,6 +38,7 @@ namespace pong
 
     float Game::CalculateBallHeight(glm::vec2 position, glm::vec2 velocity)
     {
+        const float c_lowerTarget = c_ballRadius;
         const float c_g = 9.82f;
         const float vx = velocity.x;
         const bool isMovingRight = velocity.x > 0.0f;
@@ -48,8 +50,8 @@ namespace pong
         const float x1 = (isMovingRight ? xtarget : c_arenaWidth - xtarget);
         const float x = position.x;
 
-        const float y0 = hasBounced ? 0.0f : c_padelTableHitOffset;
-        const float y1 = hasBounced ? c_padelTableHitOffset : 0.0f;
+        const float y0 = hasBounced ? c_lowerTarget : c_padelTableHitOffset;
+        const float y1 = hasBounced ? c_padelTableHitOffset : c_lowerTarget;
 
         const float vy = -(vx * (y1 - y0 + (c_g * std::pow(x0 - x1, 2)) / (2 * std::pow(vx, 2)))) / (x0 - x1);
         const float py = y0 + (vy * (x - x0)) / vx - (c_g * std::pow(x - x0, 2)) / (2 * std::pow(vx, 2));
@@ -83,8 +85,7 @@ namespace pong
             char c = scoreText[i];
             uint32_t number = c - '0';
 
-            // Add a tiny amount of offset to avoid z-fighting
-            glm::vec3 offset = glm::vec3(i * (letterWorldWidth + letterSpacing), i * 0.1f, 0.0f);
+            glm::vec3 offset = glm::vec3(i * (letterWorldWidth + letterSpacing), 0.0f, 0.0f);
             glm::vec3 position = (start + offset) + origin;
             instance.transform = glm::translate(glm::mat4(1.0f), position) * glm::scale(glm::mat4(1.0f), glm::vec3(letterWorldWidth, 1.0f, -letterWorldWidth));
             instance.offsetAndSize = glm::vec4(number * letterWidth / m_numbersTextureAtlas->GetWidth(), 0.0f, letterWidth / m_numbersTextureAtlas->GetWidth(), 1.0f);
@@ -102,7 +103,7 @@ namespace pong
         Connection &connection = Application::GetConnection();
         GameStateMessage *msg = connection.GetLatestMessage();
 
-        if (msg == nullptr)
+        if (msg == nullptr || msg->handeled)
         {
             return;
         }
@@ -118,9 +119,17 @@ namespace pong
         m_ball.velocity = glm::vec3(ballVelocity.x, 0.0f, ballVelocity.y);
         msg->events.hasHit = msg->events.hasHit || HasBallHitTable(ballPosition, ballVelocity);
 
+        std::set<int32_t> playersToRemove;
+        for (auto &&[id, player] : m_players)
+        {
+            playersToRemove.insert(id);
+        }
+
         // Update players
         for (auto &&msgPlayer : msg->players)
         {
+            playersToRemove.erase(msgPlayer.playerId);
+
             if (!m_players.contains(msgPlayer.playerId))
             {
                 m_players[msgPlayer.playerId] = {};
@@ -135,12 +144,10 @@ namespace pong
                 if (msgPlayer.playerId == msg->head.playerId)
                 {
                     m_winSound->PlayAt(m_ball.transform.position, 250.0f);
-                    std::cout << "You won!" << std::endl;
                 }
                 else
                 {
                     m_loseSound->PlayAt(m_ball.transform.position, 250.0f);
-                    std::cout << "You lost!" << std::endl;
                 }
             }
 
@@ -156,6 +163,11 @@ namespace pong
 
             player.currentAngle += (player.targetAngle - player.currentAngle) * 5.0f * deltaTime;
             player.transform.position = newPlayerPos;
+        }
+
+        for (auto &&id : playersToRemove)
+        {
+            m_players.erase(id);
         }
 
         // Update camera and play hit sounds
@@ -193,6 +205,8 @@ namespace pong
 
         // Asymtotically approach target
         m_camera.offset = glm::mix(m_camera.offset, newOffset, 5.0f * deltaTime);
+
+        msg->handeled = true;
     }
 
     void Game::Render(Renderer &renderer)
@@ -218,18 +232,16 @@ namespace pong
             i++;
         }
 
-        renderer.SubmitInstances(m_paddelModel.get(), playerTransforms);
         renderer.SubmitInstances(m_numbersTextureAtlas.get(), scoreInstances);
+        renderer.SubmitInstances(m_paddelModel.get(), playerTransforms);
         renderer.SubmitInstances(m_tableModel.get(), {m_table.transform.GetMatrix()});
         renderer.SubmitInstances(m_ballModel.get(), {m_ball.transform.GetMatrix() * ballRenderTransformOffset});
 
-        // // For debugging, translate and scale
-        // glm::vec3 ballPos = m_ball.transform.position;
-        // ballPos.y = 0.0f;
-        // glm::mat4 paddleTransform1 = glm::translate(glm::mat4(1.0f), m_players[0].transform.position - glm::vec3(c_padelWidth / 2.0f, 0.0f, -c_padelHeight / 2.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(c_padelWidth, 1.0f, c_padelHeight));
-        // glm::mat4 paddleTransform2 = glm::translate(glm::mat4(1.0f), m_players[1].transform.position - glm::vec3(c_padelWidth / 2.0f, 0.0f, -c_padelHeight / 2.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(c_padelWidth, 1.0f, c_padelHeight));
-        // glm::mat4 ballTransform = glm::translate(glm::mat4(1.0f), ballPos - glm::vec3(c_ballRadius, 0.0f, c_ballRadius)) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f * c_ballRadius, 1.0f, 2.0f * c_ballRadius));
-        // renderer.SubmitInstances(m_debugPlane.get(), {ballTransform});
+        // Floor
+        // SpriteBatch::Instance floorInstance;
+        // floorInstance.transform = glm::translate(glm::mat4(1.0f), glm::vec3(c_arenaWidth / 2.0f, -80.0f, c_arenaHeight / 2.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(c_arenaWidth * 10.0f, 1.0f, c_arenaWidth * 10.0f));
+        // renderer.SubmitInstances(m_floorSprite.get(), {floorInstance});
+        // renderer.SubmitInstances(m_debugPlane.get(), {floorInstance.transform});
     }
 
     void Game::Terminate()

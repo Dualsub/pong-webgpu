@@ -19,11 +19,11 @@ namespace pong
 
                 Connection &connection = Application::GetConnection();
 
-                if (keyEvent->keyCode == 38)
+                if (keyEvent->keyCode == 38 || keyEvent->keyCode == 87)
                 {
                     connection.SendPressedUp(true);
                 }
-                else if (keyEvent->keyCode == 40)
+                else if (keyEvent->keyCode == 40 || keyEvent->keyCode == 83)
                 {
                     connection.SendPressedDown(true);
                 }
@@ -43,11 +43,11 @@ namespace pong
                 Connection &connection = Application::GetConnection();
 
                 // Up arrow
-                if (keyEvent->keyCode == 38)
+                if (keyEvent->keyCode == 38 || keyEvent->keyCode == 87)
                 {
                     connection.SendPressedUp(false);
                 }
-                else if (keyEvent->keyCode == 40)
+                else if (keyEvent->keyCode == 40 || keyEvent->keyCode == 83)
                 {
                     connection.SendPressedDown(false);
                 }

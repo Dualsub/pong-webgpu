@@ -44,13 +44,30 @@ namespace pong
         file.read(reinterpret_cast<char *>(data.data()), data.size());
         file.close();
 
+        wgpu::TextureFormat format = wgpu::TextureFormat::Undefined;
+        switch (header.numChannels)
+        {
+        case 1:
+            format = wgpu::TextureFormat::R8Unorm;
+            break;
+        case 2:
+            format = wgpu::TextureFormat::RG8Unorm;
+            break;
+        case 4:
+            format = wgpu::TextureFormat::RGBA8Unorm;
+            break;
+        default:
+            std::cerr << "Unsupported texture format: " << path << std::endl;
+            return nullptr;
+        }
+
         wgpu::TextureDescriptor descriptor;
         descriptor.dimension = wgpu::TextureDimension::e2D;
         descriptor.size.width = header.width;
         descriptor.size.height = header.height;
         descriptor.size.depthOrArrayLayers = 1;
         descriptor.sampleCount = 1;
-        descriptor.format = wgpu::TextureFormat::RGBA8Unorm;
+        descriptor.format = format;
         descriptor.mipLevelCount = 1;
         descriptor.usage = wgpu::TextureUsage::CopyDst | wgpu::TextureUsage::TextureBinding;
 
@@ -64,13 +81,13 @@ namespace pong
 
         wgpu::TextureDataLayout source;
         source.offset = 0;
-        source.bytesPerRow = header.numChannels * header.width;
+        source.bytesPerRow = header.numChannels * header.width * header.bytesPerChannel;
         source.rowsPerImage = header.height;
 
         queue.WriteTexture(&imageCopyTexture, data.data(), header.width * header.height * header.numChannels * header.bytesPerChannel, &source, &descriptor.size);
 
         wgpu::TextureViewDescriptor viewDescriptor;
-        viewDescriptor.format = wgpu::TextureFormat::RGBA8Unorm;
+        viewDescriptor.format = format;
         viewDescriptor.dimension = wgpu::TextureViewDimension::e2D;
         viewDescriptor.baseMipLevel = 0;
         viewDescriptor.mipLevelCount = 1;
@@ -93,6 +110,7 @@ namespace pong
         wgpu::Sampler sampler = device.CreateSampler(&samplerDescriptor);
 
         uint32_t id = s_nextId++;
+        std::cout << "Texture id: " << id << ":" << path << std::endl;
 
         return std::make_unique<Texture>(id, header.width, header.height, texture, textureView, sampler);
     }

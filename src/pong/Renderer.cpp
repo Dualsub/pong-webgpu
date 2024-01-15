@@ -70,26 +70,28 @@ namespace pong
             }
         }
         visibility /= 9.0;
+        visibility = max(visibility, 0.6);
 
+        let lightColor = vec3f(1.0);
         // vector to point from the light source towards the fragment's position
         let lightDir = normalize(-uUniforms.lightDirection);
         let viewDir = normalize(uUniforms.cameraPosition - in.position.xyz);
 
         // diffuse shading
-        let diff = max(dot(in.normal, lightDir), 0.0);
+        let diff = max(dot(in.normal, lightDir), 0.6);
+        let diffuse = diff * lightColor;
         
         // specular shading
         let halfWay = normalize(lightDir + viewDir);
         
-        let spec = pow(max(dot(halfWay, in.normal), 0.0), 0.3);
-        let specular = vec3f(spec);
+        let spec = pow(max(dot(halfWay, in.normal), 0.0), 16.0);
+        let specular = spec * lightColor * 2.0;
         
-        let diffuse = diff * in.color; 
-        let ambient = 0.2 * in.color;
+        let ambient = 0.2 * lightColor;
 
-        // let linear_color = pow(in.color, vec3f(2.2));
-        let light = dot(normalize(in.normal), lightDir * 0.5 + 0.5) * visibility;
-        return vec4f(ambient + light * in.color * 0.8, 1.0);
+        let color = vec3f(ambient + visibility * (diff + specular) * in.color);
+        let linear_color = pow(color, vec3f(2.2));
+        return vec4(linear_color, 1.0f);
     }
 
     )";
@@ -157,7 +159,11 @@ namespace pong
 
     @fragment
     fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-        return textureSample(spriteTexture, spriteSampler, in.texCoord);
+        let color = textureSample(spriteTexture, spriteSampler, in.texCoord);
+        if (color.a < 0.1) {
+            discard;
+        }
+        return color;
     }
 
     )";
@@ -755,7 +761,6 @@ namespace pong
         bindGroupDesc.layout = m_bindGroupLayouts[0];
         bindGroupDesc.entryCount = 1;
         bindGroupDesc.entries = &uniformBinding;
-        std::cout << "hello" << std::endl;
         m_bindGroup = m_device.CreateBindGroup(&bindGroupDesc);
 
         std::array<wgpu::BindGroupEntry, 2> shadowMapBindings{};
@@ -855,7 +860,6 @@ namespace pong
         size_t indexCount = m_quad->GetIndexCount();
         pass.SetIndexBuffer(m_quad->GetIndexBuffer(), wgpu::IndexFormat::Uint32, 0, indexCount * sizeof(uint32_t));
 
-        uint32_t index = 0;
         for (auto &&batch : m_spriteBatches)
         {
             if (batch.texture == nullptr || batch.texture->GetId() == 0 || m_spriteBindGroups.find(batch.texture->GetId()) == m_spriteBindGroups.end() || batch.instances.empty())
@@ -864,7 +868,7 @@ namespace pong
             }
 
             wgpu::BindGroup &bindGroup = m_spriteBindGroups[batch.texture->GetId()];
-            pass.SetBindGroup(0, bindGroup, 0, nullptr);
+            pass.SetBindGroup(0, bindGroup);
 
             m_queue.WriteBuffer(m_spriteInstanceBuffer, 0, batch.instances.data(), batch.instances.size() * sizeof(SpriteBatch::Instance));
 
@@ -979,7 +983,6 @@ namespace pong
         m_swapChain.Present();
         m_device.Tick();
 #endif
-
         m_batches.clear();
     }
 

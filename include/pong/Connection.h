@@ -42,6 +42,7 @@ namespace pong
         std::vector<Player> players;
         Ball ball;
         Events events;
+        bool handeled = false;
     };
 
     struct InputMessage

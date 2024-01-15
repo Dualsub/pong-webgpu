@@ -13,6 +13,8 @@ namespace pong
     class AudioPlayer
     {
     private:
+        const float c_globalVolume = 0.1f;
+
         ALCdevice *device = nullptr;
         ALCcontext *context = nullptr;
 

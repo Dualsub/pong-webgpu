@@ -30,7 +30,7 @@ namespace pong
         struct Instance
         {
             glm::mat4 transform;
-            glm::vec4 offsetAndSize;
+            glm::vec4 offsetAndSize = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
         };
 
         std::vector<Instance> instances;
@@ -170,7 +170,7 @@ namespace pong
 
         void SubmitInstances(Texture *texture, const std::vector<SpriteBatch::Instance> &instances)
         {
-            if (texture == nullptr && texture->GetId())
+            if (texture == nullptr || texture->GetId() == 0)
                 return;
 
             m_spriteBatches.push_back({texture, instances});

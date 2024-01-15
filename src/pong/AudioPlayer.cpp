@@ -17,6 +17,9 @@ namespace pong
         }
 
         alcMakeContextCurrent(context);
+
+        alListenerf(AL_GAIN, c_globalVolume);
+
         return true;
     }
 

@@ -22,12 +22,23 @@ namespace pong
                    return ai ? 1 : 0;) == 1;
     }
 
+    Events EventOr(const Events &lhs, const Events &rhs)
+    {
+        Events result;
+        result.hasHit = lhs.hasHit || rhs.hasHit;
+        result.playerWasHit = lhs.playerWasHit || rhs.playerWasHit;
+        result.hasSmashed = lhs.hasSmashed || rhs.hasSmashed;
+        result.newRound = lhs.newRound || rhs.newRound;
+        return result;
+    }
+
     EM_BOOL onopen(int eventType, const EmscriptenWebSocketOpenEvent *websocketEvent, void *userData)
     {
         Connection *connection = reinterpret_cast<Connection *>(userData);
         std::cout << "onopen" << std::endl;
         return EM_TRUE;
     }
+
     EM_BOOL onerror(int eventType, const EmscriptenWebSocketErrorEvent *websocketEvent, void *userData)
     {
         Connection *connection = reinterpret_cast<Connection *>(userData);
@@ -108,7 +119,15 @@ namespace pong
     void Connection::AddMessage(const GameStateMessage &message)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        m_messages.push_back(message);
+
+        GameStateMessage newMessage = message;
+
+        if (m_messages.size() > 0 && !m_messages.back().handeled)
+        {
+            newMessage.events = EventOr(m_messages.back().events, message.events);
+        }
+
+        m_messages.push_back(newMessage);
 
         if (m_messages.size() > c_maxMessages)
         {
