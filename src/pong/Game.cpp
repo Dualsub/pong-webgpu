@@ -21,7 +21,12 @@ namespace pong
         m_ballModel = renderer.CreateModel("./dist/ball.dat");
         // m_debugPlane = renderer.CreateQuad({1.0f, 1.0f}, glm::vec3(156, 72, 72) * 1.0f / 255.0f);
 
-        m_numbersTextureAtlas = renderer.CreateTexture("./dist/numbers.dat");
+        m_fontTextureAtlas = renderer.CreateTexture("./dist/font.dat");
+
+        glm::mat4 baseTextTransform = glm::translate(glm::mat4(1.0f), glm::vec3(c_arenaWidth / 2.0f, 30.0f, -c_arenaHeight / 8.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.5f, 1.0f, -0.5f));
+        m_waitingTextSprites = GenerateTextSprites("Waiting for opponent", baseTextTransform);
+        m_gameOverTextSprites = GenerateTextSprites("Game over", baseTextTransform * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 1.0f, 2.0f)));
+        m_startingTextSprites = GenerateTextSprites("Starting", baseTextTransform * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 1.0f, 2.0f)));
 
         m_hitSound = Sound::Create("./dist/ball_hit_1.wav");
         m_smashSound = Sound::Create("./dist/smash_hit.wav");
@@ -69,33 +74,57 @@ namespace pong
         return value;
     }
 
-    void Game::PositionScoreInstances(std::vector<SpriteBatch::Instance> &instances, uint32_t score, glm::vec3 origin)
+    uint32_t GetFontAtlasOffset(char c)
     {
-        const float letterWidth = 148.0f;
-        const float letterWorldWidth = letterWidth * 0.1f;
-        const float letterSpacing = -4.0f;
+        if (c >= 'A' && c <= 'Z')
+        {
+            return c - 'A';
+        }
+        else if (c >= 'a' && c <= 'z')
+        {
+            return c - 'a';
+        }
+        else if (c >= '0' && c <= '9')
+        {
+            return 26 + c - '0';
+        }
 
-        std::string scoreText = std::to_string(score);
-        instances.resize(instances.size() + scoreText.size());
+        return 0;
+    }
 
-        glm::vec3 start = glm::vec3(-(scoreText.size() * letterWorldWidth + letterSpacing * (scoreText.size() - 1)) / 2.0f, 0.0f, 0.0f);
-        for (uint32_t i = 0; i < scoreText.size(); i++)
+    std::vector<SpriteBatch::Instance> Game::GenerateTextSprites(const std::string &text, const glm::mat4 &transform, const glm::vec4 &tint) const
+    {
+        const size_t textSize = text.size();
+        std::vector<SpriteBatch::Instance> instances;
+        instances.resize(textSize);
+
+        glm::vec3 start = glm::vec3(-(textSize * letterWorldWidth + letterSpacing * textSize) / 2.0f, 0.0f, 0.0f);
+        for (uint32_t i = 0; i < textSize; i++)
         {
             SpriteBatch::Instance instance;
-            char c = scoreText[i];
-            uint32_t number = c - '0';
+            char c = text[i];
+            if (c == ' ')
+            {
+                continue;
+            }
+            uint32_t offset = GetFontAtlasOffset(c);
 
-            glm::vec3 offset = glm::vec3(i * (letterWorldWidth + letterSpacing), 0.0f, 0.0f);
-            glm::vec3 position = (start + offset) + origin;
-            instance.transform = glm::translate(glm::mat4(1.0f), position) * glm::scale(glm::mat4(1.0f), glm::vec3(letterWorldWidth, 1.0f, -letterWorldWidth));
-            instance.offsetAndSize = glm::vec4(number * letterWidth / m_numbersTextureAtlas->GetWidth(), 0.0f, letterWidth / m_numbersTextureAtlas->GetWidth(), 1.0f);
-
-            instances[i + instances.size() - scoreText.size()] = instance;
+            instance.offsetAndSize = glm::vec4(offset * letterWidth / m_fontTextureAtlas->GetWidth(), 0.0f, letterWidth / m_fontTextureAtlas->GetWidth(), 1.0f);
+            glm::vec3 offsetPosition = glm::vec3(i * (letterWorldWidth + letterSpacing), 0.0f, 0.0f);
+            glm::vec3 position = (start + offsetPosition);
+            instance.transform = transform * glm::translate(glm::mat4(1.0f), position) * glm::scale(glm::mat4(1.0f), glm::vec3(letterWorldWidth, 1.0f, letterWorldWidth));
+            instance.tint = tint;
+            instances[i] = instance;
         }
+
+        return instances;
     }
 
     void Game::Update(float deltaTime)
     {
+        static std::mt19937 gen(0);
+        static std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+
         static std::chrono::steady_clock::time_point startTime = std::chrono::steady_clock::now();
         std::chrono::steady_clock::time_point currentTime = std::chrono::steady_clock::now();
         float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
@@ -108,12 +137,26 @@ namespace pong
             return;
         }
 
-        static std::mt19937 gen(0);
-        static std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+        m_playerId = msg->head.playerId;
+        m_state = msg->state;
 
         // Update ball
         glm::vec2 ballVelocity = msg->ball.velocity * c_scaleFactor;
-        glm::vec2 ballPosition = msg->ball.position * c_scaleFactor;
+
+        static float ts = 1.0f;
+
+        // Asymtotically slow down ball when game is over
+        // if (msg->state == GameState::GameOver)
+        // {
+        //     ts += deltaTime * (0.1f - ts);
+        // }
+        // else
+        // {
+        //     ts = 1.0f;
+        // }
+
+        // We simulate the ball on the client if we are in between rounds or game over
+        glm::vec2 ballPosition = (msg->state != GameState::InBetweenRounds && msg->state != GameState::GameOver) ? msg->ball.position * c_scaleFactor : glm::vec2(m_ball.transform.position.x, m_ball.transform.position.z) + ballVelocity * deltaTime * ts;
         float ballHeight = CalculateBallHeight(ballPosition, ballVelocity);
         m_ball.transform.position = glm::vec3(ballPosition.x, ballHeight, ballPosition.y);
         m_ball.velocity = glm::vec3(ballVelocity.x, 0.0f, ballVelocity.y);
@@ -201,6 +244,8 @@ namespace pong
             glm::rotate(glm::mat4(1.0f), glm::radians(maxShake * dist(gen) * shake), glm::vec3(1.0f, 0.0f, 0.0f));
 
         glm::vec3 ballTranslation = glm::vec3(m_ball.transform.position.x - c_arenaWidth / 2.0f, 0.0f, m_ball.transform.position.z - c_arenaHeight / 2.0f);
+        ballTranslation.x = glm::clamp(ballTranslation.x, -c_arenaWidth / 2.0f, c_arenaWidth / 2.0f);
+        ballTranslation.z = glm::clamp(ballTranslation.z, -c_arenaHeight / 2.0f, c_arenaHeight / 2.0f);
         newOffset = glm::translate(newOffset, -ballTranslation * 0.05f);
 
         // Asymtotically approach target
@@ -216,7 +261,7 @@ namespace pong
         renderer.SetCameraView(m_camera.transform.GetMatrix() * m_camera.offset);
 
         std::vector<glm::mat4> playerTransforms = std::vector<glm::mat4>(m_players.size());
-        std::vector<SpriteBatch::Instance> scoreInstances = std::vector<SpriteBatch::Instance>(m_players.size());
+        std::vector<SpriteBatch::Instance> spriteInstances = std::vector<SpriteBatch::Instance>();
         uint32_t i = 0;
         const float letterWidth = 148.0f;
         for (const auto &[id, player] : m_players)
@@ -227,12 +272,36 @@ namespace pong
 
             // Score
             float xOffset = (player.transform.position.x < c_arenaWidth / 2.0f ? -1.0f : 1.0f) * c_arenaWidth / 4.0f;
-            PositionScoreInstances(scoreInstances, player.score, glm::vec3(c_arenaWidth / 2.0f + xOffset, 0.0f, c_arenaHeight / 6.0f));
+            std::vector<SpriteBatch::Instance> instances = GenerateTextSprites(
+                std::to_string(player.score),
+                glm::translate(glm::mat4(1.0f), glm::vec3(c_arenaWidth / 2.0f + xOffset, 0.0f, c_arenaHeight / 6.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, 1.0f, -1.0f)));
+            spriteInstances.insert(spriteInstances.end(), instances.begin(), instances.end());
 
+            // Player names
+            // bool isPlayer = id == m_playerId;
+            // std::string name = isPlayer ? "You" : "Opponent";
+            // instances = GenerateTextSprites(
+            //     name,
+            //     glm::translate(glm::mat4(1.0f), glm::vec3(c_arenaWidth / 2.0f + xOffset, 0.0f, c_arenaHeight * 1.05)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.4f, 1.0f, -0.4f)),
+            //     glm::vec4(!isPlayer, 0.0f, isPlayer, 1.0f));
+            // spriteInstances.insert(spriteInstances.end(), instances.begin(), instances.end());
             i++;
         }
 
-        renderer.SubmitInstances(m_numbersTextureAtlas.get(), scoreInstances);
+        if (m_state == GameState::WaitingForPlayers)
+        {
+            spriteInstances.insert(spriteInstances.end(), m_waitingTextSprites.begin(), m_waitingTextSprites.end());
+        }
+        else if (m_state == GameState::GameOver)
+        {
+            spriteInstances.insert(spriteInstances.end(), m_gameOverTextSprites.begin(), m_gameOverTextSprites.end());
+        }
+        else if (m_state == GameState::Starting)
+        {
+            spriteInstances.insert(spriteInstances.end(), m_startingTextSprites.begin(), m_startingTextSprites.end());
+        }
+
+        renderer.SubmitInstances(m_fontTextureAtlas.get(), spriteInstances);
         renderer.SubmitInstances(m_paddelModel.get(), playerTransforms);
         renderer.SubmitInstances(m_tableModel.get(), {m_table.transform.GetMatrix()});
         renderer.SubmitInstances(m_ballModel.get(), {m_ball.transform.GetMatrix() * ballRenderTransformOffset});

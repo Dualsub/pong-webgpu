@@ -128,18 +128,18 @@ namespace pong
     struct VertexOutput {
         @builtin(position) position: vec4f,
         @location(0) texCoord: vec2f,
+        @location(1) tint: vec4f,
     };
 
     struct SpriteUniforms {
-        model: mat4x4<f32>,
         view: mat4x4<f32>,
         projection: mat4x4<f32>,
-        offsetAndSize: vec4<f32>,
     };
 
     struct SpriteInstance {
         transform: mat4x4<f32>,
         offsetAndSize: vec4<f32>,
+        tint: vec4<f32>,
     }
 
     @group(0) @binding(0) var spriteTexture: texture_2d<f32>;
@@ -154,6 +154,7 @@ namespace pong
         var position = vec4f(in.position, 1.0);
         out.position = uUniforms.projection * uUniforms.view * instance.transform * position;
         out.texCoord = in.texCoord * instance.offsetAndSize.zw + instance.offsetAndSize.xy;
+        out.tint = instance.tint;
         return out;
     }
 
@@ -163,7 +164,7 @@ namespace pong
         if (color.a < 0.1) {
             discard;
         }
-        return color;
+        return color * in.tint;
     }
 
     )";

@@ -87,7 +87,7 @@ namespace pong
 
     GameStateMessage Connection::ParseMessage(const uint8_t *message, size_t length)
     {
-        const size_t numPlayers = (length - (4 + 4 + 8 + 3)) / 16;
+        const size_t numPlayers = (length - (sizeof(Head) + sizeof(Ball) + sizeof(Events) + sizeof(GameState))) / sizeof(Player);
 
         GameStateMessage msg;
         uint8_t *current = const_cast<uint8_t *>(message);
@@ -112,6 +112,10 @@ namespace pong
         Events *events = reinterpret_cast<Events *>(current);
         msg.events = *events;
         current += sizeof(Events);
+
+        GameState *state = reinterpret_cast<GameState *>(current);
+        msg.state = *state;
+        current += sizeof(GameState);
 
         return msg;
     }

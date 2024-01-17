@@ -9,6 +9,15 @@
 
 namespace pong
 {
+    enum class GameState : uint8_t
+    {
+        WaitingForPlayers = 0,
+        Starting = 1,
+        Running = 2,
+        InBetweenRounds = 3,
+        GameOver = 4,
+    };
+
     struct Head
     {
         uint32_t playerId = 0;
@@ -42,6 +51,7 @@ namespace pong
         std::vector<Player> players;
         Ball ball;
         Events events;
+        GameState state;
         bool handeled = false;
     };
 

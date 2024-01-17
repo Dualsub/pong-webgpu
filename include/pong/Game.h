@@ -31,6 +31,11 @@ namespace pong
     static constexpr float c_padelTableHitOffset = 20.0f;
     static constexpr float c_tabelHitLocation = 0.75f;
 
+    // Font constants
+    const float letterWidth = 148.0f;
+    const float letterWorldWidth = letterWidth * 0.1f;
+    const float letterSpacing = -4.0f;
+
     // Component types
     struct CTransform
     {
@@ -91,20 +96,28 @@ namespace pong
     {
     private:
         // Entities
-        std::map<int32_t, EPlayer>
-            m_players;
+        int32_t m_playerId = 0;
+        std::map<int32_t, EPlayer> m_players;
         EBall m_ball;
         ETable m_table = {{glm::vec3(c_arenaWidth / 2.0f, -79.0f, c_arenaHeight / 2.0f), glm::quat(glm::vec3(0.0f, glm::radians(90.0f), 0.0f))}};
         ECamera m_camera = {{glm::lookAt(glm::vec3(c_arenaWidth / 2.0f, 250.0f, 2 * c_arenaHeight / 2.0f),
                                          glm::vec3(c_arenaWidth / 2.0f, 0.0f, c_arenaHeight / 2.0f),
                                          glm::vec3(0.0f, 1.0f, 0.0f))}};
 
+        // Text sprite instances
+        std::vector<SpriteBatch::Instance> m_waitingTextSprites;
+        std::vector<SpriteBatch::Instance> m_gameOverTextSprites;
+        std::vector<SpriteBatch::Instance> m_startingTextSprites;
+
+        // Game state
+        GameState m_state = GameState::Starting;
+
         // Graphics
         std::unique_ptr<Model> m_ballModel;
         std::unique_ptr<Model> m_paddelModel;
         std::unique_ptr<Model> m_tableModel;
         std::unique_ptr<Model> m_debugPlane;
-        std::unique_ptr<Texture> m_numbersTextureAtlas;
+        std::unique_ptr<Texture> m_fontTextureAtlas;
 
         std::unique_ptr<Sound> m_hitSound;
         std::unique_ptr<Sound> m_smashSound;
@@ -114,6 +127,7 @@ namespace pong
 
         float CalculateBallHeight(glm::vec2 position, glm::vec2 velocity);
         bool HasBallHitTable(glm::vec2 position, glm::vec2 velocity);
+        std::vector<SpriteBatch::Instance> GenerateTextSprites(const std::string &text, const glm::mat4 &transform, const glm::vec4 &tint = glm::vec4(1.0f)) const;
         void PositionScoreInstances(std::vector<struct SpriteBatch::Instance> &instances, uint32_t score, glm::vec3 origin);
 
     public:

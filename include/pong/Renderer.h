@@ -31,6 +31,7 @@ namespace pong
         {
             glm::mat4 transform;
             glm::vec4 offsetAndSize = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+            glm::vec4 tint = glm::vec4(1.0f);
         };
 
         std::vector<Instance> instances;
@@ -61,10 +62,8 @@ namespace pong
 
         struct SpriteUniforms
         {
-            glm::mat4 model = glm::mat4(1.0f);
             glm::mat4 view = glm::mat4(1.0f);
             glm::mat4 projection = glm::mat4(1.0f);
-            glm::vec4 offsetAndSize = glm::vec4(0.0f);
         };
 
         static_assert(sizeof(SpriteUniforms) % 16 == 0);
@@ -80,7 +79,7 @@ namespace pong
         const static uint32_t c_shadowMapSize = 2048;
         const std::string c_canvasSelector = "#canvas";
         const uint32_t c_maxInstances = 1000;
-        const uint32_t c_maxSprites = 10;
+        const uint32_t c_maxSprites = 50;
 
         // Window
         uint32_t m_width = c_width;
