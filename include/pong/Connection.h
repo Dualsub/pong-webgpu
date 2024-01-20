@@ -26,7 +26,7 @@ namespace pong
 
     struct Player
     {
-        int32_t playerId = 0;
+        uint32_t playerId = 0;
         int32_t score = 0;
         glm::vec2 position = {};
     };

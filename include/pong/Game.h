@@ -96,8 +96,8 @@ namespace pong
     {
     private:
         // Entities
-        int32_t m_playerId = 0;
-        std::map<int32_t, EPlayer> m_players;
+        uint32_t m_playerId = 0;
+        std::map<uint32_t, EPlayer> m_players;
         EBall m_ball;
         ETable m_table = {{glm::vec3(c_arenaWidth / 2.0f, -79.0f, c_arenaHeight / 2.0f), glm::quat(glm::vec3(0.0f, glm::radians(90.0f), 0.0f))}};
         ECamera m_camera = {{glm::lookAt(glm::vec3(c_arenaWidth / 2.0f, 250.0f, 2 * c_arenaHeight / 2.0f),
